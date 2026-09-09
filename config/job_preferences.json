@@ -17,7 +17,7 @@
   ],
   "minimum_score": 68,
   "application_mode": "AUTO_EMAIL",
-  "schedule_times": ["07:00", "13:00", "18:00"],
+  "schedule_times": ["07:00"],
   "allow_other_sa_locations": true,
   "email_auto_send": true,
   "email_minimum_score": 72,
