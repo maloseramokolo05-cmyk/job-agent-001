@@ -1,9 +1,9 @@
 from __future__ import annotations
-import json,os
+import json
 from pathlib import Path
-from backend.config import ROOT
+from backend.config import storage_path
 class TokenStore:
- def __init__(self,path=None): self.path=Path(path or ROOT/"data/tokens/google_token.json")
+ def __init__(self,path=None): self.path=Path(path) if path else storage_path("data","tokens","google_token.json")
  def save(self,value):
   self.path.parent.mkdir(parents=True,exist_ok=True); self.path.write_text(json.dumps(value),encoding="utf-8")
   try: self.path.chmod(0o600)
