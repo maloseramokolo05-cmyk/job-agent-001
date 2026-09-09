@@ -1,11 +1,43 @@
 {
-  "priority_locations": ["Pretoria", "Centurion", "Midrand", "Johannesburg", "Gauteng"],
-  "job_categories": [],
-  "minimum_score": 75,
-  "application_mode": "PREPARE",
+  "priority_locations": ["Pretoria", "Centurion", "Akasia", "Midrand", "Johannesburg", "Gauteng"],
+  "job_categories": [
+    "marketing",
+    "digital marketing",
+    "social media",
+    "content",
+    "communications",
+    "customer service",
+    "sales support",
+    "administration",
+    "operations",
+    "project support",
+    "e-commerce",
+    "web content",
+    "graduate"
+  ],
+  "minimum_score": 68,
+  "application_mode": "AUTO_EMAIL",
   "schedule_times": ["07:00", "13:00", "18:00"],
   "allow_other_sa_locations": true,
-  "search_feeds": [],
+  "email_auto_send": true,
+  "email_minimum_score": 72,
+  "search_feeds": [
+    "https://iyouth.co.za/rss/category/private-jobs",
+    "https://iyouth.co.za/rss/category/internships",
+    "https://iyouth.co.za/rss/category/online-jobs"
+  ],
   "greenhouse_boards": [],
-  "lever_sites": []
+  "lever_sites": [],
+  "careers24_enabled": true,
+  "careers24_queries": [
+    "marketing",
+    "digital-marketing",
+    "social-media",
+    "administrator",
+    "customer-service",
+    "operations",
+    "graduate"
+  ],
+  "max_jobs_per_source": 60,
+  "email_duplicate_window_days": 365
 }
