@@ -1,8 +1,57 @@
 # Tumelo Job Agent 2.0.0
 
-## ANDROID QUICK START
+## WEBSITE QUICK START — RECOMMENDED
 
-Install [Termux from F-Droid](https://f-droid.org/packages/com.termux/) rather than the obsolete Play Store build. In Termux:
+The easiest way to test and keep this project updated is now as a **private hosted website**. The repository includes a Render Blueprint (`render.yaml`) that deploys the FastAPI backend and mobile-friendly dashboard together.
+
+### Deploy
+
+1. Sign in to Render and connect the GitHub account that can access this private repository.
+2. Authorize Render's GitHub app for `maloseramokolo05-cmyk/job-agent-001`.
+3. Deploy the repository as a Blueprint using the included `render.yaml`.
+4. When Render asks for secret environment variables, provide:
+   - `APP_USERNAME`
+   - `APP_PASSWORD`
+   - `OPENAI_API_KEY` (optional for initial UI testing)
+   - `GOOGLE_CLIENT_ID` (optional until Google integration is configured)
+   - `GOOGLE_CLIENT_SECRET` (optional until Google integration is configured)
+5. Open the generated `https://...onrender.com` URL and sign in with your app username/password.
+
+The website is responsive and works directly in Chrome on Android. No Termux is needed for normal website use. It can also be installed to the Android home screen as a PWA if the browser offers the install option.
+
+### Updates
+
+The Blueprint has Git auto-deploy enabled. After CI passes and a change is merged to the connected branch (normally `main`), Render automatically rebuilds the website. No APK rebuild is needed.
+
+### Free testing warning
+
+The default Blueprint uses Render's free web-service plan so you can test without committing to hosting costs. Free Render services have ephemeral local storage, so SQLite history, uploaded CVs, generated files, Google tokens, and edited settings can disappear after a restart, idle spin-down, or redeploy.
+
+For daily use, upgrade to a paid Render service and attach a persistent disk, then set `APP_DATA_DIR` to the disk mount path. The code already routes runtime data through `APP_DATA_DIR`.
+
+Read the full guide: [`docs/WEB_HOSTING.md`](docs/WEB_HOSTING.md).
+
+## Google setup for the website
+
+After the website is deployed, add this exact redirect URI to the Google Cloud OAuth Web Client:
+
+```text
+https://<your-render-service>.onrender.com/api/google/callback
+```
+
+Enable Gmail, Drive, and Calendar APIs in the same Google Cloud project. The hosted app automatically uses the Render external hostname for OAuth unless an explicit redirect URL is configured.
+
+Gmail auto-send remains disabled by default. Calendar creation still requires confirmation.
+
+## Security
+
+Hosted mode supports private HTTP Basic authentication. `APP_AUTH_ENABLED=true` is set by the Render Blueprint, and you provide `APP_USERNAME` and `APP_PASSWORD` as Render secrets. The public health endpoint contains no credentials, OAuth tokens, CV data, or API keys.
+
+Never commit `.env`, CVs, Google secrets/tokens, generated documents, or logs.
+
+## ANDROID LOCAL MODE
+
+If you prefer everything to remain on your phone instead of hosting it, Termux is still supported:
 
 ```bash
 pkg update -y
@@ -14,88 +63,61 @@ chmod +x INSTALL_ANDROID.sh START_ANDROID.sh STOP_ANDROID.sh UPDATE_ANDROID.sh s
 ./START_ANDROID.sh
 ```
 
-Open **http://127.0.0.1:8000**. Complete the mobile setup, upload the master CV, configure permitted feeds, and press **RUN JOB SEARCH**. The app runs locally and does not require ChatGPT to remain open.
+Open `http://127.0.0.1:8000`.
 
-Use `./scripts/status_android.sh`, `./STOP_ANDROID.sh`, and `./UPDATE_ANDROID.sh` for lifecycle management. Run `termux-setup-storage` only if you want access to `~/storage/downloads` or `~/storage/shared`; dashboard uploads copy the selected PDF/DOCX into private app storage. See [the complete Android guide](docs/ANDROID_SETUP.md).
+Use `./scripts/status_android.sh`, `./STOP_ANDROID.sh`, and `./UPDATE_ANDROID.sh` for lifecycle management. See [`docs/ANDROID_SETUP.md`](docs/ANDROID_SETUP.md).
 
 ## Capability truth table
 
-| Capability | Status | Notes |
-|---|---|---|
-| Core dashboard, SQLite, scoring, CRM, scheduler | ANDROID_SUPPORTED | Runs in Termux and an Android browser |
-| Google OAuth, Gmail, Drive, Calendar REST APIs | ANDROID_SUPPORTED | Requires the user's Google Cloud OAuth client configuration |
-| Application links and prepared answers | ANDROID_ASSISTED | User opens the link, reviews, submits, and marks applied |
-| Playwright form automation | DESKTOP_ONLY | Optional `requirements-browser.txt`; not installed on Android |
-| Generic CAPTCHA/login automation | NOT_IMPLEMENTED | Intentionally prohibited |
+| Capability | Hosted website | Android local | Notes |
+|---|---|---|---|
+| Dashboard, scoring, CRM | SUPPORTED | SUPPORTED | FastAPI + responsive frontend |
+| SQLite persistence | TEST-ONLY on free hosting | SUPPORTED | Use paid Render disk for hosted persistence |
+| CV upload/generation | SUPPORTED | SUPPORTED | Hosted files persist only with persistent storage |
+| Google OAuth | SUPPORTED | SUPPORTED | Hosted redirect URI must be added to Google Cloud |
+| Gmail | PARTIAL | PARTIAL | Search/classification/drafts/send guard exist; full reply threading still needs work |
+| Drive | PARTIAL | PARTIAL | Upload/list basics exist; complete two-way master-CV sync is not finished |
+| Calendar | PARTIAL | PARTIAL | Confirmed event creation/dedupe exists; Gmail-to-event extraction needs work |
+| Application links | ASSISTED | ASSISTED | User reviews/submits supported application pages |
+| Generic browser auto-apply | NOT READY | DESKTOP ONLY | No CAPTCHA/login bypass |
 
-## Safety and architecture
+## Pipeline
 
-The pipeline is **SEARCH → NORMALIZE → DEDUPLICATE → PARSE → SCORE → PRIORITIZE → DOCUMENTS → PREPARE → REVIEW → explicit send/submit → TRACK**. Connectors fail independently and publish capabilities/status. Restricted sources become `MANUAL_APPLICATION`; unknown questions become `NEEDS_USER_INPUT`.
+`SEARCH → NORMALIZE → DEDUPLICATE → PARSE → SCORE → PRIORITIZE → DOCUMENTS → PREPARE → REVIEW → explicit send/submit → TRACK`
 
-The default mode is `PREPARE`. Gmail auto-send is false and Calendar creation requires confirmation. Google uses Authorization Code + PKCE, one-time CSRF state, narrow feature scopes, refresh tokens, and private token storage. The frontend never receives token values. External content is rendered through HTML escaping. Read the [security review](docs/SECURITY.md).
+Default application mode is `PREPARE`.
 
-## Google setup
+## Job-source limitation
 
-Follow [Google API setup](docs/GOOGLE_API_SETUP.md). In short: enable Gmail, Drive, and Calendar APIs; create a Web OAuth client; authorize `http://127.0.0.1:8000/api/google/callback`; save the downloaded JSON as `data/secrets/credentials.json`; restart; then select **Connect Google account**. No Gmail password is requested or stored.
+Real job discovery is still the largest unfinished product area. The current core source is configurable RSS and the default `search_feeds` list can be empty. Configure legitimate vacancy feeds/connectors before expecting meaningful daily search results.
 
-Scopes are separated by feature:
+## Local configuration
 
-- Gmail read/compose; send scope is requested only when the send feature is selected.
-- Drive `drive.file`, which is limited to files created/opened by the app.
-- Calendar `calendar.events`.
+Copy `.env.example` to `.env` for local use. Important defaults:
 
-Gmail sync uses a job-focused query and deterministic confidence-based classification. It stores message metadata/snippets, not the entire mailbox. Drafts are allowed; sends require a dashboard confirmation or `GOOGLE_GMAIL_AUTO_SEND=true`. Drive lists only files bearing the app marker and detects local/remote master-CV conflicts. Calendar deterministically prevents duplicate events.
+- `HOST=127.0.0.1`
+- `PORT=8000`
+- `APPLICATION_MODE=PREPARE`
+- `TIMEZONE=Africa/Johannesburg`
+- `GOOGLE_GMAIL_AUTO_SEND=false`
+- `APP_AUTH_ENABLED=false` locally
 
-## Profile, CVs, and documents
-
-The dashboard profile supports identity/contact information, work authorization, locations, target roles, minimum salary, schedule, skills, and application mode. `config/profile.json` remains editable for education, employment, languages, tools, links, notice period, and work preferences. The master CV is the factual authority.
-
-Generated files have date-prefixed safe names and metadata recording the job, type, master-CV hash, content hash, template/generator versions, and optional Drive ID. CV facts can be reordered by relevance but are not invented. DOCX is always the primary output. PDF is best-effort and never aborts a run if unavailable on Termux.
-
-## Configuration
-
-Copy `.env.example` to `.env`. Important safe defaults:
-
-- `HOST=127.0.0.1`, `PORT=8000` — local device only.
-- `DATABASE_PATH=data/job_agent.db`.
-- `APPLICATION_MODE=PREPARE`.
-- `TIMEZONE=Africa/Johannesburg`.
-- `GOOGLE_CREDENTIALS_FILE=data/secrets/credentials.json`.
-- `GOOGLE_GMAIL_AUTO_SEND=false`.
-
-Never commit `.env`, CVs, credentials, tokens, generated files, or logs.
-
-## Doctor and manual commands
+## Doctor and tests
 
 ```bash
 source .venv/bin/activate
 python -m agents.cli doctor
 python -m agents.cli init-db
-python -m agents.cli run
 python -m agents.cli run --sample
-pytest -q
+python -m pytest -q
 ```
 
-`doctor` prints PASS/WARN/FAIL for Python, database/schema, folders, CV, configuration, Google credentials/token, scheduler, and sources without printing secrets. `--sample` inserts one non-real example only for verification.
+CI tests Python 3.12/3.13, compileall, pytest, Ruff, diff cleanliness, Android script syntax, and the existence of the Render Blueprint. CI cannot by itself prove a real Google OAuth account or physical Android device works end-to-end.
 
 ## Windows
 
-Install Python 3.12+, copy `.env.example` to `.env`, and double-click `START_JOB_AGENT.bat`. It keeps the original Windows dashboard/scheduler workflow and opens http://localhost:8000. Use `STOP_JOB_AGENT.bat` to stop its named windows. Desktop Playwright is optional:
+Python 3.12+ remains supported. Copy `.env.example` to `.env` and run `START_JOB_AGENT.bat`; use `STOP_JOB_AGENT.bat` to stop it.
 
-```powershell
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt -r requirements-google.txt -r requirements-browser.txt
-playwright install chromium
-```
+## Production note
 
-## Linux
-
-Use Python 3.12+, create `.venv`, install `requirements.txt` and `requirements-google.txt`, run `python -m agents.cli init-db`, then start Uvicorn and `python -m agents.scheduler` as separate processes.
-
-## Database upgrades and interrupted runs
-
-Startup runs additive SQLite migrations; existing job/application history is retained. A run left `RUNNING` after process death becomes `INTERRUPTED` on next migration and is visible through the run API. Job/source uniqueness prevents restart duplicates. Interrupted runs can be discarded; restarting a run safely relies on deduplication. Granular within-source resume is not yet implemented.
-
-## Tests and platform caveat
-
-CI tests Python 3.12/3.13, compileall, pytest, Ruff fatal errors, diff cleanliness, and shell syntax. Linux CI validates portable code and scripts, **not a physical Android device**. Run `./INSTALL_ANDROID.sh`, `doctor`, a sample ingestion, CV generation, OAuth, and API smoke tests on the target phone before treating a build as device-validated.
+The hosted web path is currently the easiest way to test and receive updates. Treat the free Render deployment as a **test environment**, not the final production datastore. Before relying on it for job history and Google tokens, add persistent storage or migrate the runtime state to managed database/object storage.
