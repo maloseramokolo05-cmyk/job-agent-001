@@ -8,7 +8,7 @@ def test_migration_and_interrupted_recovery():
  with connect() as db: db.execute("INSERT INTO runs(started_at,state) VALUES('2026-01-01','RUNNING')")
  init_db()
  with connect() as db: assert db.execute("SELECT state FROM runs ORDER BY id DESC LIMIT 1").fetchone()[0]=="INTERRUPTED"
- assert schema_version()==2
+ assert schema_version()==3
 
 def test_android_scripts_are_safe_and_valid():
  for name in ["INSTALL_ANDROID.sh","START_ANDROID.sh","STOP_ANDROID.sh","UPDATE_ANDROID.sh","scripts/status_android.sh"]:
