@@ -17,9 +17,9 @@ from pydantic import BaseModel, Field
 
 from agents.documents import generate_cover_letter, generate_cv
 from agents.pipeline import cv_text, run
-from applications.email_apply import apply_by_email
+from applications.email_apply import apply_by_email, preview_email_application
 from backend.config import ROOT, load_preferences, load_profile, save_json
-from backend.database import connect, event, init_db, now, row, rows, schema_version
+from backend.database import LATEST_SCHEMA_VERSION, connect, event, init_db, now, row, rows, schema_version
 from backend.security import COOKIE, CSRF_COOKIE, new_session, password_matches, rate_limit, revoke, session_user
 from backend.storage import ObjectStorage
 from backend.version import __version__
@@ -67,7 +67,7 @@ class CalendarInput(BaseModel):
 
 
 class GoogleStart(BaseModel):
-    features: list[str] = Field(default_factory=lambda: ["gmail", "gmail_send", "drive", "calendar"])
+    features: list[str] = Field(default_factory=lambda: ["gmail", "drive", "calendar"])
 
 
 ALLOWED = {
@@ -178,7 +178,7 @@ def health():
         "status": "ok",
         "version": __version__,
         "platform": platform.system().lower(),
-        "database": {"ready": schema_version() == 3, "schema_version": schema_version()},
+        "database": {"ready": schema_version() == LATEST_SCHEMA_VERSION, "schema_version": schema_version()},
         "scheduler": "vercel_cron" if os.getenv("VERCEL") else "external_process",
         "google": {"connected": google["connected"]},
         "job_connector_count": 4,
@@ -188,7 +188,7 @@ def health():
 @app.get("/api/ready")
 def ready():
     storage = ObjectStorage().healthy()
-    database = schema_version() == 3
+    database = schema_version() == LATEST_SCHEMA_VERSION
     production = os.getenv("APP_ENV") == "production"
     cron = bool(os.getenv("CRON_SECRET"))
     google_configured = bool(os.getenv("GOOGLE_CLIENT_ID"))
@@ -287,6 +287,28 @@ async def upload_cv(file: UploadFile = File(...)):
     }
 
 
+@app.get("/api/cv")
+def master_cv():
+    value = row(
+        "SELECT version,storage_key,sha256,content_type,original_name,created_at FROM master_cvs ORDER BY version DESC LIMIT 1"
+    )
+    return {"available": bool(value), "master_cv": value}
+
+
+@app.get("/api/cv/download")
+def download_master_cv():
+    value = row("SELECT * FROM master_cvs ORDER BY version DESC LIMIT 1")
+    if not value:
+        raise HTTPException(404, "Master CV not found")
+    stream, content_type = ObjectStorage().get(value["storage_key"])
+    filename = Path(value["original_name"]).name
+    return StreamingResponse(
+        iter([stream.getvalue()]),
+        media_type=content_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @app.get("/api/jobs")
 def jobs(status: str | None = None, min_score: float = 0, q: str = ""):
     sql = "SELECT * FROM jobs WHERE COALESCE(score,0)>=?"
@@ -365,6 +387,16 @@ def email_apply(job_id: int, value: ApplyEmail):
         raise HTTPException(400, "Confirm this application before sending")
     try:
         return apply_by_email(job_id, cv_text(), explicit_authorization=True)
+    except PermissionError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+
+
+@app.get("/api/jobs/{job_id}/email-preview")
+def email_application_preview(job_id: int):
+    try:
+        return preview_email_application(job_id, cv_text())
     except PermissionError as exc:
         raise HTTPException(409, str(exc)) from exc
     except ValueError as exc:

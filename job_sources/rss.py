@@ -1,3 +1,6 @@
+import os
+import time
+
 from defusedxml import ElementTree as ET
 
 from agents.models import Job
@@ -13,10 +16,11 @@ class RSSSource(JobSource):
     def search(self, profile, preferences):
         jobs = []
         limit = int(preferences.get("max_jobs_per_source", 60))
+        deadline = time.monotonic() + float(os.getenv("SOURCE_TIME_BUDGET_SECONDS", "40"))
         for feed in preferences.get("search_feeds", []):
-            if len(jobs) >= limit:
+            if len(jobs) >= limit or time.monotonic() >= deadline:
                 break
-            response = safe_get(feed, timeout=20)
+            response = safe_get(feed, timeout=12)
             for item in ET.fromstring(response.content).findall(".//item"):
                 if len(jobs) >= limit:
                     break

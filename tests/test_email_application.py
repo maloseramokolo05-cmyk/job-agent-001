@@ -1,6 +1,8 @@
 import base64
 from email import message_from_bytes, policy
 
+import pytest
+
 from agents.models import Job
 from agents.repository import ingest
 from applications import email_apply
@@ -16,6 +18,8 @@ def test_application_email_requires_application_context():
     assert email == "recruitment@example.co.za"
     assert "apply" in evidence.lower()
     assert extract_application_email("For privacy questions contact privacy@example.co.za")[0] is None
+    assert extract_application_email("Questions about this vacancy? Email info@example.co.za")[0] is None
+    assert extract_application_email("To apply, send your CV to no.reply@example.co.za")[0] is None
 
 
 def test_gmail_message_can_attach_pdf():
@@ -51,9 +55,16 @@ def test_verified_email_application_tracks_send(monkeypatch):
     assert not duplicate
     with connect() as db:
         db.execute("UPDATE jobs SET score=90,status='SHORTLISTED' WHERE id=?", (job_id,))
+    monkeypatch.setenv("GOOGLE_GMAIL_AUTO_SEND", "false")
+    with pytest.raises(PermissionError, match="Automatic email application"):
+        email_apply.apply_by_email(job_id, "Verified master CV fact\nBBA Marketing")
     monkeypatch.setattr(email_apply, "_reverify_published_email", lambda *args, **kwargs: True)
     monkeypatch.setattr(email_apply, "already_sent_application", lambda *args, **kwargs: {"duplicate": False})
     monkeypatch.setattr(email_apply, "send_message", lambda *args, **kwargs: {"id": "gmail-message-123"})
+    preview = email_apply.preview_email_application(job_id, "Verified master CV fact\nBBA Marketing")
+    assert preview["eligible"] is True
+    assert preview["recipient"] == "jobs@acme.example"
+    assert preview["cv_filename"].endswith("CV.pdf")
     result = email_apply.apply_by_email(job_id, "Verified master CV fact\nBBA Marketing", explicit_authorization=True)
     assert result["sent"] is True
     assert result["message_id"] == "gmail-message-123"

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+import time
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
@@ -40,7 +42,7 @@ class Careers24Source(JobSource):
 
     @staticmethod
     def _detail(url: str) -> Job | None:
-        response = safe_get(url, timeout=20)
+        response = safe_get(url, timeout=12)
         soup = BeautifulSoup(response.text, "html.parser")
         title_node = soup.find("h1")
         title = clean(title_node.get_text(" ", strip=True) if title_node else "")
@@ -77,13 +79,14 @@ class Careers24Source(JobSource):
         if not preferences.get("careers24_enabled", True):
             return []
         limit = int(preferences.get("max_jobs_per_source", 60))
+        deadline = time.monotonic() + float(os.getenv("SOURCE_TIME_BUDGET_SECONDS", "40"))
         jobs = []
         seen = set()
         for listing_url in self._listing_urls(preferences):
-            if len(jobs) >= limit:
+            if len(jobs) >= limit or time.monotonic() >= deadline:
                 break
             try:
-                response = safe_get(listing_url, timeout=20)
+                response = safe_get(listing_url, timeout=12)
                 soup = BeautifulSoup(response.text, "html.parser")
             except Exception:
                 continue
@@ -94,7 +97,7 @@ class Careers24Source(JobSource):
                     seen.add(href)
                     links.append(href)
             for href in links:
-                if len(jobs) >= limit:
+                if len(jobs) >= limit or time.monotonic() >= deadline:
                     break
                 try:
                     job = self._detail(href)

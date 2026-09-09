@@ -19,15 +19,15 @@
   "application_mode": "AUTO_EMAIL",
   "schedule_times": ["07:00"],
   "allow_other_sa_locations": true,
-  "email_auto_send": true,
+  "email_auto_send": false,
   "email_minimum_score": 72,
   "search_feeds": [
     "https://iyouth.co.za/rss/category/private-jobs",
     "https://iyouth.co.za/rss/category/internships",
     "https://iyouth.co.za/rss/category/online-jobs"
   ],
-  "greenhouse_boards": [],
-  "lever_sites": [],
+  "greenhouse_boards": ["2u", "elixirr", "ogilvy"],
+  "lever_sites": ["mamamoney", "assist-world", "brafton", "weloglobal", "binance"],
   "careers24_enabled": true,
   "careers24_queries": [
     "marketing",

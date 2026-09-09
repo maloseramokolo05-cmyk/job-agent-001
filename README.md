@@ -1,20 +1,20 @@
-# Tumelo Job Agent 2.0.0
+# Tumelo Job Agent 3.1.0
 
-> **Release gate:** this checkout is suitable for local development, not Vercel production. Read
-> [the backend audit](BACKEND_AUDIT.md), [architecture](ARCHITECTURE.md), and
-> [production-readiness decision](PRODUCTION_READINESS.md). In particular, PostgreSQL and durable
-> workflow execution remain mandatory release blockers; no live E2E success is claimed.
+Private South African job discovery, factual CV tailoring, verified email applications and an
+application CRM. The Vercel runtime uses Neon Postgres for durable records, private documents,
+sessions and encrypted Google OAuth tokens. Read [production readiness](PRODUCTION_READINESS.md)
+for the live-deployment acceptance gate; CI alone is not proof of a working deployment.
 
 ## Production security and storage
 
 Set `ADMIN_PASSWORD_HASH` to an Argon2id hash, use a randomly generated `SESSION_SECRET` of at least
-32 characters, and set `APP_ENV=production`. Production startup fails closed unless authentication
-is configured and `STORAGE_PROVIDER=s3`. S3-compatible credentials stay server-side; the bucket must
-be private. See `.env.example` for the variables actually consumed by this revision.
+32 characters, and set `APP_ENV=production`. Production startup fails closed unless authentication,
+Postgres and durable storage are configured. `STORAGE_PROVIDER=database` stores private bytes in
+Neon; `s3` remains an optional alternative. See `.env.example` for the consumed variables.
 
-The real-source adapters are Greenhouse public job boards, Lever public postings, and configured
-RSS/Atom-compatible feeds. Add Greenhouse board tokens under `greenhouse_boards` and Lever site names
-under `lever_sites` in preferences. Source URLs are treated as untrusted and guarded against private
+The real-source adapters are Careers24, configured iYouth RSS feeds, selected Greenhouse boards and
+selected Lever employer sites. Greenhouse and Lever results are filtered to roles explicitly located
+in or remotely open to South Africa. Source URLs are treated as untrusted and guarded against private
 network access, redirects, oversized responses and unbounded waits.
 
 ## ANDROID QUICK START
@@ -111,7 +111,10 @@ Use Python 3.12+, create `.venv`, install `requirements.txt` and `requirements-g
 
 ## Database upgrades and interrupted runs
 
-Startup runs additive SQLite migrations; existing job/application history is retained. A run left `RUNNING` after process death becomes `INTERRUPTED` on next migration and is visible through the run API. Job/source uniqueness prevents restart duplicates. Interrupted runs can be discarded; restarting a run safely relies on deduplication. Granular within-source resume is not yet implemented.
+Startup runs additive SQLite/Postgres migrations; existing job/application history is retained. A
+partial unique index permits one active run across serverless instances. A run older than the stale
+window becomes `INTERRUPTED` when the next run begins, without cold starts invalidating healthy work.
+Job/source uniqueness prevents restart duplicates. Granular within-source resume is not yet implemented.
 
 ## Tests and platform caveat
 

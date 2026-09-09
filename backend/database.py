@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 from .config import database_path
 
-LATEST_SCHEMA_VERSION = 3
+LATEST_SCHEMA_VERSION = 4
 ID_TABLES = {
     "users", "sessions", "candidate_profiles", "candidate_profile_versions", "master_cvs",
     "audit_events", "jobs", "applications", "documents", "emails", "google_accounts",
@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS emails(id INTEGER PRIMARY KEY, google_message_id TEXT
 CREATE TABLE IF NOT EXISTS google_accounts(id INTEGER PRIMARY KEY, email TEXT, status TEXT NOT NULL DEFAULT 'DISCONNECTED', scopes TEXT DEFAULT '[]', last_gmail_sync TEXT, last_drive_sync TEXT, last_calendar_sync TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS calendar_events(id INTEGER PRIMARY KEY, google_event_id TEXT UNIQUE, job_id INTEGER, source_thread_id TEXT, event_type TEXT NOT NULL, starts_at TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(job_id,source_thread_id,starts_at), FOREIGN KEY(job_id) REFERENCES jobs(id));
 CREATE TABLE IF NOT EXISTS runs(id INTEGER PRIMARY KEY, started_at TEXT NOT NULL, finished_at TEXT, state TEXT NOT NULL, progress INTEGER DEFAULT 0, message TEXT DEFAULT '', stats TEXT DEFAULT '{}', checkpoint TEXT DEFAULT '{}');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_runs_one_active ON runs(state) WHERE state='RUNNING';
 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY, job_id INTEGER, run_id INTEGER, event_type TEXT NOT NULL, detail TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS source_status(source_name TEXT PRIMARY KEY, supported INTEGER NOT NULL, authenticated INTEGER NOT NULL, search_supported INTEGER NOT NULL, application_supported INTEGER NOT NULL, status TEXT NOT NULL, last_success TEXT, last_error TEXT);
@@ -58,6 +59,7 @@ CREATE TABLE IF NOT EXISTS emails(id BIGSERIAL PRIMARY KEY, google_message_id TE
 CREATE TABLE IF NOT EXISTS google_accounts(id BIGSERIAL PRIMARY KEY, email TEXT, status TEXT NOT NULL DEFAULT 'DISCONNECTED', scopes TEXT DEFAULT '[]', last_gmail_sync TEXT, last_drive_sync TEXT, last_calendar_sync TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS calendar_events(id BIGSERIAL PRIMARY KEY, google_event_id TEXT UNIQUE, job_id BIGINT REFERENCES jobs(id), source_thread_id TEXT, event_type TEXT NOT NULL, starts_at TEXT NOT NULL, created_at TEXT NOT NULL, UNIQUE(job_id,source_thread_id,starts_at));
 CREATE TABLE IF NOT EXISTS runs(id BIGSERIAL PRIMARY KEY, started_at TEXT NOT NULL, finished_at TEXT, state TEXT NOT NULL, progress INTEGER DEFAULT 0, message TEXT DEFAULT '', stats TEXT DEFAULT '{}', checkpoint TEXT DEFAULT '{}');
+CREATE UNIQUE INDEX IF NOT EXISTS idx_runs_one_active ON runs(state) WHERE state='RUNNING';
 CREATE TABLE IF NOT EXISTS events(id BIGSERIAL PRIMARY KEY, job_id BIGINT, run_id BIGINT, event_type TEXT NOT NULL, detail TEXT, created_at TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS source_status(source_name TEXT PRIMARY KEY, supported INTEGER NOT NULL, authenticated INTEGER NOT NULL, search_supported INTEGER NOT NULL, application_supported INTEGER NOT NULL, status TEXT NOT NULL, last_success TEXT, last_error TEXT);
@@ -211,7 +213,6 @@ def migrate():
                     "INSERT INTO schema_migrations(version,applied_at) VALUES(?,?) ON CONFLICT(version) DO NOTHING",
                     (version, now()),
                 )
-            db.execute("UPDATE runs SET state='INTERRUPTED', finished_at=? WHERE state='RUNNING'", (now(),))
         return
 
     with connect() as db:
@@ -229,7 +230,6 @@ def migrate():
         _sqlite_column(db, "events", "run_id", "INTEGER")
         for version in range(1, LATEST_SCHEMA_VERSION + 1):
             db.execute("INSERT OR IGNORE INTO schema_migrations(version,applied_at) VALUES(?,?)", (version, now()))
-        db.execute("UPDATE runs SET state='INTERRUPTED', finished_at=? WHERE state='RUNNING'", (now(),))
 
 
 def init_db():

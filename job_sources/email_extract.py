@@ -7,15 +7,24 @@ from urllib.parse import urlparse
 from .http import safe_get
 
 EMAIL_RE = re.compile(r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", re.I)
-APPLICATION_WORDS = (
-    "apply", "application", "applicants", "candidate", "candidates", "cv", "resume",
-    "send", "submit", "email", "vacancy", "recruitment", "recruiter", "careers",
-)
 REJECT_LOCAL_PARTS = {"noreply", "no-reply", "donotreply", "do-not-reply", "privacy", "webmaster"}
 
 
 def _clean_email(value: str) -> str:
     return value.strip().strip(".,;:()[]{}<>\"'").lower()
+
+
+def _is_explicit_application_route(context: str, email: str) -> bool:
+    """Require wording that ties this exact address to submitting an application or CV."""
+    target = re.escape(email)
+    patterns = (
+        rf"\b(?:email|send|submit|forward)\b.{{0,100}}\b(?:cv|resume|application)\b.{{0,80}}{target}",
+        rf"\b(?:email|send|submit|forward)\b.{{0,80}}{target}.{{0,100}}\b(?:cv|resume|application)\b",
+        rf"\b(?:cv|resume|application)\b.{{0,100}}\b(?:to|via|at)\b.{{0,50}}{target}",
+        rf"\b(?:apply|applications?)\b.{{0,80}}\b(?:by|via|through)\s+(?:email|e-mail)\b.{{0,80}}{target}",
+        rf"\b(?:applications?|cv|resume)\b\s*[:\-]\s*{target}",
+    )
+    return any(re.search(pattern, context, re.I | re.S) for pattern in patterns)
 
 
 def extract_application_email(text: str) -> tuple[str, str] | tuple[None, None]:
@@ -25,13 +34,13 @@ def extract_application_email(text: str) -> tuple[str, str] | tuple[None, None]:
     for match in EMAIL_RE.finditer(text):
         email = _clean_email(match.group(0))
         local = email.split("@", 1)[0]
-        if local in REJECT_LOCAL_PARTS:
+        normalized_local = re.sub(r"[^a-z]", "", local)
+        if local in REJECT_LOCAL_PARTS or normalized_local in {"noreply", "donotreply", "privacy", "webmaster"}:
             continue
         start = max(0, match.start() - 240)
         end = min(len(text), match.end() + 240)
         context = " ".join(text[start:end].split())
-        lowered = context.lower()
-        if not any(word in lowered for word in APPLICATION_WORDS):
+        if not _is_explicit_application_route(context, email):
             continue
         return email, context[:500]
     return None, None
