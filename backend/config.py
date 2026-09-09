@@ -13,8 +13,14 @@ def load_env(path=ROOT/".env"):
   if key and key not in os.environ:os.environ[key]=value
 load_env()
 
-DATA_ROOT=Path(os.getenv("APP_DATA_DIR",str(ROOT))).expanduser()
-if not DATA_ROOT.is_absolute(): DATA_ROOT=ROOT/DATA_ROOT
+def _default_data_root()->Path:
+ configured=os.getenv("APP_DATA_DIR","").strip()
+ if configured:return Path(configured).expanduser()
+ if os.getenv("VERCEL"):return Path("/tmp/tumelo-job-agent")
+ return ROOT
+
+DATA_ROOT=_default_data_root()
+if not DATA_ROOT.is_absolute():DATA_ROOT=ROOT/DATA_ROOT
 
 def storage_path(*parts:str)->Path:
  path=DATA_ROOT.joinpath(*parts)
@@ -22,12 +28,11 @@ def storage_path(*parts:str)->Path:
  return path
 
 def _config_path(name:str)->Path:
- # Runtime-edited profile/preferences live on persistent storage when APP_DATA_DIR is set.
  target=storage_path("config",name)
- if target.exists(): return target
+ if target.exists():return target
  source=ROOT/"config"/name
  target.parent.mkdir(parents=True,exist_ok=True)
- if DATA_ROOT!=ROOT and source.exists(): shutil.copy2(source,target)
+ if DATA_ROOT!=ROOT and source.exists():shutil.copy2(source,target)
  return target if target.exists() else source
 
 def _json(name):
@@ -46,4 +51,7 @@ def app_base_url():
  value=os.getenv("APP_BASE_URL","").strip().rstrip("/")
  if value:return value
  render_host=os.getenv("RENDER_EXTERNAL_HOSTNAME","").strip()
- return f"https://{render_host}" if render_host else "http://127.0.0.1:8000"
+ if render_host:return f"https://{render_host}"
+ vercel_host=(os.getenv("VERCEL_PROJECT_PRODUCTION_URL","") or os.getenv("VERCEL_URL","")).strip().rstrip("/")
+ if vercel_host:return f"https://{vercel_host}"
+ return "http://127.0.0.1:8000"
