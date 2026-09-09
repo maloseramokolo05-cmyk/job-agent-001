@@ -113,7 +113,16 @@ def startup():
 @app.middleware("http")
 async def security(request: Request, call_next):
     auth_configured = bool(os.getenv("ADMIN_PASSWORD_HASH"))
-    public_paths = {"/", "/api/health", "/api/ready", "/api/auth/login", "/api/cron/search"}
+    # The Google callback arrives from a cross-site redirect, so app-session cookies may be absent.
+    # OAuth state + PKCE protect this endpoint; the rest of the Google routes remain authenticated.
+    public_paths = {
+        "/",
+        "/api/health",
+        "/api/ready",
+        "/api/auth/login",
+        "/api/cron/search",
+        "/api/google/callback",
+    }
     public = not auth_configured or request.url.path in public_paths or request.url.path.startswith("/assets/")
     if not public and not session_user(request.cookies.get(COOKIE)):
         response = JSONResponse({"error": {"code": "UNAUTHENTICATED", "message": "Authentication required"}}, 401)

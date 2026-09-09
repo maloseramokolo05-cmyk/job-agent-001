@@ -29,6 +29,15 @@ def test_login_session_csrf_and_logout(monkeypatch):
         assert client.get("/api/jobs").status_code == 401
 
 
+def test_google_callback_is_public_but_other_google_routes_are_protected(monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD_HASH", PasswordHasher().hash("valid password"))
+    monkeypatch.setenv("SESSION_SECRET", "x" * 40)
+    with TestClient(app) as client:
+        # Missing OAuth params should reach FastAPI validation rather than be blocked by app auth.
+        assert client.get("/api/google/callback").status_code == 422
+        assert client.get("/api/google/status").status_code == 401
+
+
 def test_health_has_security_headers():
     os.environ.pop("ADMIN_PASSWORD_HASH", None)
     with TestClient(app) as client:

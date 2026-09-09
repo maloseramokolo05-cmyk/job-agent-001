@@ -37,11 +37,24 @@ def scopes_for(features):
     return sorted({scope for feature in features for scope in FEATURE_SCOPES.get(feature, [])})
 
 
+def _redirect_uri(explicit=None):
+    if explicit:
+        return explicit
+    # On Vercel prefer the stable production alias over deployment-specific URLs saved in env.
+    # This keeps OAuth working after every production redeploy.
+    production_host = os.getenv("VERCEL_PROJECT_PRODUCTION_URL", "").strip()
+    if os.getenv("VERCEL") and production_host:
+        if not production_host.startswith(("http://", "https://")):
+            production_host = f"https://{production_host}"
+        return f"{production_host.rstrip('/')}/api/google/callback"
+    return os.getenv("GOOGLE_REDIRECT_URI") or f"{app_base_url()}/api/google/callback"
+
+
 def start_authorization(features, redirect_uri=None):
     client_id, _ = client_config()
     if not client_id:
         raise ValueError("Google OAuth client is not configured")
-    redirect_uri = redirect_uri or os.getenv("GOOGLE_REDIRECT_URI") or f"{app_base_url()}/api/google/callback"
+    redirect_uri = _redirect_uri(redirect_uri)
     state = secrets.token_urlsafe(32)
     verifier = secrets.token_urlsafe(64)
     challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()

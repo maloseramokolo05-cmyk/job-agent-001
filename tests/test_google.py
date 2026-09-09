@@ -18,6 +18,9 @@ def configured(monkeypatch,tmp_path):
 def test_oauth_start_pkce_and_state(monkeypatch,tmp_path):
  configured(monkeypatch,tmp_path);result=oauth.start_authorization(["drive"]);assert "code_challenge=" in result["authorization_url"]
  with connect() as db:assert db.execute("SELECT 1 FROM oauth_state WHERE state=?",(result["state"],)).fetchone()
+def test_oauth_prefers_stable_vercel_production_url(monkeypatch,tmp_path):
+ configured(monkeypatch,tmp_path);monkeypatch.setenv("VERCEL","1");monkeypatch.setenv("VERCEL_PROJECT_PRODUCTION_URL","tumelo-job-agent.vercel.app");result=oauth.start_authorization(["drive"]);assert "redirect_uri=https%3A%2F%2Ftumelo-job-agent.vercel.app%2Fapi%2Fgoogle%2Fcallback" in result["authorization_url"]
+ with connect() as db:assert db.execute("SELECT redirect_uri FROM oauth_state WHERE state=?",(result["state"],)).fetchone()[0]=="https://tumelo-job-agent.vercel.app/api/google/callback"
 def test_oauth_callback_rejects_bad_state(monkeypatch,tmp_path):
  configured(monkeypatch,tmp_path)
  with pytest.raises(ValueError):oauth.complete_authorization("code","bad",HTTP())
