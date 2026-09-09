@@ -1,0 +1,2 @@
+# Desktop only. Playwright Chromium is not installed by INSTALL_ANDROID.sh.
+playwright>=1.47,<2

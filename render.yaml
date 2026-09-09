@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: tumelo-job-agent
+    runtime: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt -r requirements-google.txt
+    startCommand: python -m backend.serve
+    healthCheckPath: /api/health
+    numInstances: 1
+    disk:
+      name: job-agent-data
+      mountPath: /var/data/tumelo-job-agent
+      sizeGB: 2
+    envVars:
+      - key: APP_DATA_DIR
+        value: /var/data/tumelo-job-agent
+      - key: DATABASE_PATH
+        value: data/job_agent.db
+      - key: HOST
+        value: 0.0.0.0
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: TIMEZONE
+        value: Africa/Johannesburg
+      - key: ADMIN_USERNAME
+        value: owner
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_REDIRECT_URI
+        sync: false
