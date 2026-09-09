@@ -22,23 +22,27 @@ def run(include_sample=False):
   maximum=env_int("MAX_JOBS_PER_RUN",100); threshold=float(prefs.get("minimum_score",75))
   for source in sources:
    try:
-    with connect() as db: db.execute("UPDATE runs SET message=? WHERE id=?",(f"Searching {source.name}...",run_id))
+    with connect() as db:
+     db.execute("UPDATE runs SET message=?,checkpoint=? WHERE id=?",(f"Searching {source.name}...",json.dumps({"source":source.name,"stats":stats}),run_id))
+     db.execute("INSERT OR REPLACE INTO source_status(source_name,supported,authenticated,search_supported,application_supported,status,last_success,last_error) VALUES(?,?,?,?,?,'CONNECTED',?,NULL)",(source.name,int(source.supported),int(source.authenticated),int(source.search_supported),int(source.application_supported),now()))
     for job in source.search(profile,prefs)[:maximum-stats["discovered"]]:
      stats["discovered"]+=1; job_id,duplicate=ingest(job)
      if duplicate: stats["duplicates"]+=1; continue
      result=score_job(job.dict(),profile,prefs,master); selected=result["score"]>=threshold
-     status="SHORTLISTED" if selected else "ANALYZED"; update_analysis(job_id,result,status); stats["analyzed"]+=1
+     status="SHORTLISTED" if selected else "DISCOVERED"; update_analysis(job_id,result,status); stats["analyzed"]+=1
      if selected:
       stats["strong_matches"]+=1
       mode=prefs.get("application_mode","PREPARE")
-      if mode in {"DOCUMENTS","PREPARE","AUTO_APPLY"} and master:
+      if mode in {"PREPARE","ASSISTED_APPLY","AUTO_APPLY"} and master:
        docx,pdf=generate_cv(job.dict(),profile,master)
-       with connect() as db: db.execute("UPDATE jobs SET cv_path=?,status=? WHERE id=?",(docx,"READY TO APPLY" if mode in {"PREPARE","AUTO_APPLY"} else "CV GENERATED",job_id))
+       with connect() as db: db.execute("UPDATE jobs SET cv_path=?,status=? WHERE id=?",(docx,"PREPARED" if mode=="PREPARE" else "READY_TO_APPLY",job_id))
        stats["documents_prepared"]+=1
      # Generic sources are deliberately manual unless a dedicated permitted adapter exists.
      if selected and source.name!="sample":
-      with connect() as db: db.execute("UPDATE jobs SET status='MANUAL REQUIRED' WHERE id=?",(job_id,)); stats["manual_required"]+=1
-   except Exception as exc: log.exception("Source %s failed",source.name); stats["errors"]+=1; event("SOURCE_ERROR",f"{source.name}: {exc}")
+      with connect() as db: db.execute("UPDATE jobs SET status='MANUAL_APPLICATION' WHERE id=?",(job_id,)); stats["manual_required"]+=1
+   except Exception as exc:
+    log.exception("Source %s failed",source.name); stats["errors"]+=1; event("SOURCE_ERROR",f"{source.name}: {exc}",run_id=run_id)
+    with connect() as db: db.execute("INSERT OR REPLACE INTO source_status(source_name,supported,authenticated,search_supported,application_supported,status,last_error) VALUES(?,?,?,?,?,'TEMPORARY_ERROR',?)",(source.name,int(source.supported),int(source.authenticated),int(source.search_supported),int(source.application_supported),str(exc)[:500]))
   with connect() as db: db.execute("UPDATE runs SET finished_at=?,state='COMPLETED',progress=100,message='Run complete',stats=? WHERE id=?",(now(),json.dumps(stats),run_id))
   return {"run_id":run_id,**stats}
  except Exception as exc:
