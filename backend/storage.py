@@ -34,6 +34,16 @@ class ObjectStorage:
             raise StorageError("Invalid object key")
         return "/".join(parts)
 
+    @staticmethod
+    def _content_type_for_key(key: str) -> str:
+        suffix = Path(key).suffix.lower()
+        return {
+            ".pdf": "application/pdf",
+            ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".json": "application/json",
+            ".txt": "text/plain",
+        }.get(suffix, "application/octet-stream")
+
     def put(self, key: str, content: bytes, content_type: str) -> dict:
         clean = self._clean(key)
         digest = hashlib.sha256(content).hexdigest()
@@ -83,7 +93,7 @@ class ObjectStorage:
         root = (ROOT / "data" / "private").resolve()
         if root not in path.parents:
             raise StorageError("Invalid object key")
-        return io.BytesIO(path.read_bytes()), "application/octet-stream"
+        return io.BytesIO(path.read_bytes()), self._content_type_for_key(clean)
 
     def healthy(self) -> bool:
         if self.provider == "database":
