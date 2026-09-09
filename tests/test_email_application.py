@@ -51,6 +51,7 @@ def test_verified_email_application_tracks_send(monkeypatch):
     assert not duplicate
     with connect() as db:
         db.execute("UPDATE jobs SET score=90,status='SHORTLISTED' WHERE id=?", (job_id,))
+    monkeypatch.setattr(email_apply, "_reverify_published_email", lambda *args, **kwargs: True)
     monkeypatch.setattr(email_apply, "already_sent_application", lambda *args, **kwargs: {"duplicate": False})
     monkeypatch.setattr(email_apply, "send_message", lambda *args, **kwargs: {"id": "gmail-message-123"})
     result = email_apply.apply_by_email(job_id, "Verified master CV fact\nBBA Marketing", explicit_authorization=True)
