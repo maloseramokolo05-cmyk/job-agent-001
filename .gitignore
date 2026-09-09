@@ -5,6 +5,7 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 data/*.db
+data/private/
 logs/*.log
 cv/master_cv.pdf
 cv/master_cv.docx

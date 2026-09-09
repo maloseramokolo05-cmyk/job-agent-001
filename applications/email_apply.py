@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import hashlib
+import os
 
-from agents.documents import generate_cv, read_document
+from agents.documents import generate_cv, read_document, safe_filename
 from backend.config import load_preferences, load_profile
 from backend.database import connect, event, now, row
 from integrations.google.gmail import already_sent_application, send_message
@@ -56,6 +57,55 @@ def _subject(job, profile):
     return f"Application: {job['title']} - {name}"
 
 
+def preview_email_application(job_id: int, master_cv_text: str):
+    """Re-verify an application route and return the exact proposed send without sending it."""
+    job = row("SELECT * FROM jobs WHERE id=?", (job_id,))
+    if not job:
+        raise ValueError("Job not found")
+    preferences = load_preferences()
+    profile = load_profile()
+    if not job.get("email_verified") or not job.get("application_email") or job.get("application_method") != "EMAIL":
+        raise PermissionError("This vacancy does not have a verified published email application route")
+    minimum = float(preferences.get("email_minimum_score", 72))
+    if float(job.get("score") or 0) < minimum:
+        raise PermissionError(f"Job score is below the automatic email threshold ({minimum:g})")
+    if not master_cv_text.strip():
+        raise ValueError("Verified master CV text is required before applying")
+    existing = row(
+        "SELECT * FROM applications WHERE job_id=? AND status IN ('APPLIED','APPLIED_CONFIRMED','INTERVIEW','ASSESSMENT','OFFER') ORDER BY id DESC LIMIT 1",
+        (job_id,),
+    )
+    if existing:
+        return {"eligible": False, "duplicate": True, "reason": "already_tracked"}
+    _reverify_published_email(job)
+    duplicate = already_sent_application(
+        job["application_email"],
+        job["title"],
+        "",
+        int(preferences.get("email_duplicate_window_days", 365)),
+    )
+    if duplicate.get("duplicate"):
+        return {
+            "eligible": False,
+            "duplicate": True,
+            "reason": "gmail_sent_match",
+            "gmail_subject": duplicate.get("subject", ""),
+        }
+    name = profile.get("name") or "Tumelo Ramokolo"
+    return {
+        "eligible": True,
+        "duplicate": False,
+        "company": job["company"],
+        "role": job["title"],
+        "recipient": job["application_email"],
+        "vacancy_url": job.get("vacancy_url") or job.get("email_source_url"),
+        "match_score": float(job.get("score") or 0),
+        "subject": _subject(job, profile),
+        "body": _body(job, profile),
+        "cv_filename": f"{name} - {safe_filename(job['title'])} - CV.pdf",
+    }
+
+
 def _reverify_published_email(job):
     """Confirm the exact application email is still present on the original live vacancy page."""
     source_url = job.get("email_source_url") or job.get("vacancy_url")
@@ -86,8 +136,11 @@ def apply_by_email(job_id: int, master_cv_text: str, *, explicit_authorization: 
     preferences = load_preferences()
     profile = load_profile()
     mode = preferences.get("application_mode", "PREPARE")
+    environment_allows_auto_send = os.getenv("GOOGLE_GMAIL_AUTO_SEND", "false").lower() == "true"
     allowed = explicit_authorization or (
-        mode in {"AUTO_EMAIL", "AUTO_APPLY"} and bool(preferences.get("email_auto_send", False))
+        environment_allows_auto_send
+        and mode in {"AUTO_EMAIL", "AUTO_APPLY"}
+        and bool(preferences.get("email_auto_send", False))
     )
     if not allowed:
         raise PermissionError("Automatic email application is not enabled")
