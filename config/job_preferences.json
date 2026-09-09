@@ -1,0 +1,9 @@
+{
+  "priority_locations": ["Pretoria", "Centurion", "Midrand", "Johannesburg", "Gauteng"],
+  "job_categories": [],
+  "minimum_score": 75,
+  "application_mode": "PREPARE",
+  "schedule_times": ["07:00", "13:00", "18:00"],
+  "allow_other_sa_locations": true,
+  "search_feeds": []
+}
