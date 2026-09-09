@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import csv
 import io
-import json
 import logging
 import os
 import platform
@@ -11,7 +10,7 @@ from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -79,16 +78,21 @@ ALLOWED = {
 
 
 def setup_logging():
-    log_path = ROOT / "logs/job_agent.log"
-    log_path.parent.mkdir(exist_ok=True)
-    if any(isinstance(handler, RotatingFileHandler) for handler in logging.getLogger().handlers):
+    root_logger = logging.getLogger()
+    if any(getattr(handler, "job_agent_handler", False) for handler in root_logger.handlers):
         return
-    handler = RotatingFileHandler(log_path, maxBytes=2_000_000, backupCount=4, encoding="utf-8")
+    if os.getenv("VERCEL"):
+        handler = logging.StreamHandler()
+    else:
+        log_path = ROOT / "logs/job_agent.log"
+        log_path.parent.mkdir(exist_ok=True)
+        handler = RotatingFileHandler(log_path, maxBytes=2_000_000, backupCount=4, encoding="utf-8")
+    handler.job_agent_handler = True
     handler.setFormatter(logging.Formatter(
         '{"time":"%(asctime)s","severity":"%(levelname)s","component":"%(name)s","message":"%(message)s"}'
     ))
-    logging.getLogger().setLevel(logging.INFO)
-    logging.getLogger().addHandler(handler)
+    root_logger.setLevel(logging.INFO)
+    root_logger.addHandler(handler)
 
 
 @app.on_event("startup")
@@ -400,11 +404,10 @@ def download_document(document_id: int):
 
 
 @app.post("/api/runs")
-def start_run(background: BackgroundTasks, sample: bool = False):
+def start_run(sample: bool = False):
     if sample and os.getenv("APP_ENV") == "production":
         raise HTTPException(400, "Sample mode is disabled in production")
-    background.add_task(run, sample)
-    return {"started": True}
+    return {"started": True, **run(sample)}
 
 
 @app.get("/api/runs/latest")
@@ -548,6 +551,8 @@ def calendar_events():
 
 @app.get("/api/logs")
 def logs():
+    if os.getenv("VERCEL"):
+        return {"lines": ["Production logs are available in the Vercel runtime log stream."]}
     path = ROOT / "logs/job_agent.log"
     lines = path.read_text(encoding="utf-8", errors="replace").splitlines()[-200:] if path.exists() else []
     return {"lines": lines}
