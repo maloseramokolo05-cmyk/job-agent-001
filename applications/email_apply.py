@@ -6,6 +6,8 @@ from agents.documents import generate_cv, read_document
 from backend.config import load_preferences, load_profile
 from backend.database import connect, event, now, row
 from integrations.google.gmail import already_sent_application, send_message
+from job_sources.email_extract import extract_application_email
+from job_sources.http import safe_get
 
 
 def _body(job, profile):
@@ -54,12 +56,30 @@ def _subject(job, profile):
     return f"Application: {job['title']} - {name}"
 
 
-def apply_by_email(job_id: int, master_cv_text: str, *, explicit_authorization: bool = False):
-    """Send one application only through a verified email route.
+def _reverify_published_email(job):
+    """Confirm the exact application email is still present on the original live vacancy page."""
+    source_url = job.get("email_source_url") or job.get("vacancy_url")
+    if not source_url:
+        raise PermissionError("The verified vacancy source URL is missing")
+    try:
+        response = safe_get(source_url, timeout=20)
+    except Exception as exc:
+        raise PermissionError("The original vacancy page is no longer reachable; application was not sent") from exc
+    content_type = response.headers.get("content-type", "").lower()
+    if "text/html" in content_type:
+        from bs4 import BeautifulSoup
 
-    `explicit_authorization` represents an explicit user-triggered action. Automated scheduled runs
-    additionally require AUTO_EMAIL/AUTO_APPLY plus `email_auto_send=true` in preferences.
-    """
+        text = BeautifulSoup(response.text, "html.parser").get_text("\n", strip=True)
+    else:
+        text = response.text
+    email, _evidence = extract_application_email(text)
+    if not email or email.lower() != job["application_email"].lower():
+        raise PermissionError("The published application email could not be re-verified on the live vacancy page")
+    return True
+
+
+def apply_by_email(job_id: int, master_cv_text: str, *, explicit_authorization: bool = False):
+    """Send one application only through a verified, still-live published email route."""
     job = row("SELECT * FROM jobs WHERE id=?", (job_id,))
     if not job:
         raise ValueError("Job not found")
@@ -83,10 +103,13 @@ def apply_by_email(job_id: int, master_cv_text: str, *, explicit_authorization: 
     if existing:
         return {"sent": False, "duplicate": True, "reason": "already_tracked", "application_id": existing["id"]}
 
+    _reverify_published_email(job)
+    # Recipient is already constrained by the Gmail query, so duplicate matching uses the vacancy title rather than
+    # blocking every future role at the same company/recruitment mailbox.
     duplicate = already_sent_application(
         job["application_email"],
         job["title"],
-        job["company"],
+        "",
         int(preferences.get("email_duplicate_window_days", 365)),
     )
     if duplicate.get("duplicate"):
