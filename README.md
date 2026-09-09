@@ -1,104 +1,101 @@
-# Tumelo Job Agent
+# Tumelo Job Agent 2.0.0
 
-A standalone, safety-first Windows job discovery and application-preparation workspace. It runs locally at **http://localhost:8000** and does not require the ChatGPT website. The initial application mode is **PREPARE**: it can search, score, produce grounded documents, and queue work, but it will not submit an application.
+## ANDROID QUICK START
 
-## What it does
+Install [Termux from F-Droid](https://f-droid.org/packages/com.termux/) rather than the obsolete Play Store build. In Termux:
 
-- Loads the editable candidate profile and master PDF/DOCX CV; the CV remains the factual source of truth.
-- Searches configured public RSS vacancy feeds through independent connectors. The connector interface supports dedicated Careers24, PNet, CareerJunction, public-sector, recruitment, or company-career adapters without coupling the pipeline to a website. Sites requiring login, CAPTCHA, or unsupported interaction remain manual.
-- Deduplicates by vacancy/source, URL, and normalized role/employer/location, then scores each vacancy from 0–100 with an explainable weighted breakdown.
-- Generates plain ATS-friendly DOCX and PDF CV versions, optional cover letters, and tracks lifecycle/status locally in SQLite.
-- Provides a setup wizard, dashboard, filters, vacancy detail/actions, live run state, CSV export, scheduling, email-draft primitives, and guarded Playwright extension points.
-
-> **Important:** Public websites change their terms and markup. Configure only feeds/pages you are permitted to access. This project does not bypass CAPTCHAs, authentication, access restrictions, or rate limits. Generic sources are marked manual; automatic submission requires a reviewed site-specific adapter, complete factual answers, `AUTO_APPLY`, and explicit confirmation.
-
-## Windows setup (copy into PowerShell)
-
-1. Install 64-bit Python 3.12 from python.org and select **Add Python to PATH**.
-2. Download/clone this repository, then open PowerShell in it:
-   ```powershell
-   cd C:\path\to\job-agent-001
-   py -3.12 -m venv .venv
-   .\.venv\Scripts\Activate.ps1
-   python -m pip install --upgrade pip
-   pip install -r requirements.txt
-   playwright install chromium
-   ```
-3. Copy the environment template:
-   ```powershell
-   Copy-Item .env.example .env
-   ```
-4. Put your CV at `cv\master_cv.pdf` or `cv\master_cv.docx`. Do not commit it.
-5. Edit `config\profile.json` and `config\job_preferences.json`, or use the first-run wizard. Never add a qualification or skill that is not true.
-6. Optionally put `OPENAI_API_KEY=...` in `.env`. The deterministic core works without it; no key is sent to the browser.
-7. Install browser automation support (needed only by future permitted site adapters): `playwright install chromium`.
-8. Double-click **`START_JOB_AGENT.bat`**. It checks/installs dependencies, initializes SQLite, launches the scheduler and backend, and opens the browser.
-9. Open **http://localhost:8000**, complete setup, then click **Start Job Run**.
-10. To stop, double-click **`STOP_JOB_AGENT.bat`**.
-
-### Scheduling while the dashboard is closed
-
-Open PowerShell **as Administrator**:
-```powershell
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\install_windows_task.ps1
+```bash
+pkg update -y
+pkg install git -y
+git clone https://github.com/maloseramokolo05-cmyk/job-agent-001.git
+cd job-agent-001
+chmod +x INSTALL_ANDROID.sh START_ANDROID.sh STOP_ANDROID.sh UPDATE_ANDROID.sh scripts/status_android.sh
+./INSTALL_ANDROID.sh
+./START_ANDROID.sh
 ```
-Times are 07:00, 13:00, and 18:00 in the Windows task. In-app scheduler times come from `config/job_preferences.json` and use Africa/Johannesburg time.
 
-### Add public search feeds
+Open **http://127.0.0.1:8000**. Complete the mobile setup, upload the master CV, configure permitted feeds, and press **RUN JOB SEARCH**. The app runs locally and does not require ChatGPT to remain open.
 
-Add permitted RSS/Atom-compatible vacancy feed URLs to `search_feeds` in `config/job_preferences.json`. Empty defaults avoid pretending to search unsupported websites. A developer can add a connector under `job_sources/` by implementing `JobSource.search`; connector failures are isolated.
+Use `./scripts/status_android.sh`, `./STOP_ANDROID.sh`, and `./UPDATE_ANDROID.sh` for lifecycle management. Run `termux-setup-storage` only if you want access to `~/storage/downloads` or `~/storage/shared`; dashboard uploads copy the selected PDF/DOCX into private app storage. See [the complete Android guide](docs/ANDROID_SETUP.md).
 
-## Environment variables
+## Capability truth table
 
-| Variable | Purpose | Default |
+| Capability | Status | Notes |
 |---|---|---|
-| `OPENAI_API_KEY` | Optional future AI enrichment; never exposed in UI | empty |
-| `OPENAI_MODEL` | Optional enrichment model | `gpt-5-mini` |
-| `DATABASE_PATH` | SQLite location | `data/job_agent.db` |
-| `DAILY_AI_BUDGET` | Daily API-cost ceiling | `2.00` |
-| `MAX_JOBS_PER_RUN` | Discovery processing limit | `100` |
-| `MIN_MATCH_SCORE` | Environment fallback | `75` |
-| `EMAIL_AUTO_SEND` | Must be true before SMTP sending | `false` |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `SMTP_FROM` | Optional SMTP details | empty |
+| Core dashboard, SQLite, scoring, CRM, scheduler | ANDROID_SUPPORTED | Runs in Termux and an Android browser |
+| Google OAuth, Gmail, Drive, Calendar REST APIs | ANDROID_SUPPORTED | Requires the user's Google Cloud OAuth client configuration |
+| Application links and prepared answers | ANDROID_ASSISTED | User opens the link, reviews, submits, and marks applied |
+| Playwright form automation | DESKTOP_ONLY | Optional `requirements-browser.txt`; not installed on Android |
+| Generic CAPTCHA/login automation | NOT_IMPLEMENTED | Intentionally prohibited |
 
-## Useful commands
+## Safety and architecture
 
-```powershell
-.\.venv\Scripts\Activate.ps1
+The pipeline is **SEARCH → NORMALIZE → DEDUPLICATE → PARSE → SCORE → PRIORITIZE → DOCUMENTS → PREPARE → REVIEW → explicit send/submit → TRACK**. Connectors fail independently and publish capabilities/status. Restricted sources become `MANUAL_APPLICATION`; unknown questions become `NEEDS_USER_INPUT`.
+
+The default mode is `PREPARE`. Gmail auto-send is false and Calendar creation requires confirmation. Google uses Authorization Code + PKCE, one-time CSRF state, narrow feature scopes, refresh tokens, and private token storage. The frontend never receives token values. External content is rendered through HTML escaping. Read the [security review](docs/SECURITY.md).
+
+## Google setup
+
+Follow [Google API setup](docs/GOOGLE_API_SETUP.md). In short: enable Gmail, Drive, and Calendar APIs; create a Web OAuth client; authorize `http://127.0.0.1:8000/api/google/callback`; save the downloaded JSON as `data/secrets/credentials.json`; restart; then select **Connect Google account**. No Gmail password is requested or stored.
+
+Scopes are separated by feature:
+
+- Gmail read/compose; send scope is requested only when the send feature is selected.
+- Drive `drive.file`, which is limited to files created/opened by the app.
+- Calendar `calendar.events`.
+
+Gmail sync uses a job-focused query and deterministic confidence-based classification. It stores message metadata/snippets, not the entire mailbox. Drafts are allowed; sends require a dashboard confirmation or `GOOGLE_GMAIL_AUTO_SEND=true`. Drive lists only files bearing the app marker and detects local/remote master-CV conflicts. Calendar deterministically prevents duplicate events.
+
+## Profile, CVs, and documents
+
+The dashboard profile supports identity/contact information, work authorization, locations, target roles, minimum salary, schedule, skills, and application mode. `config/profile.json` remains editable for education, employment, languages, tools, links, notice period, and work preferences. The master CV is the factual authority.
+
+Generated files have date-prefixed safe names and metadata recording the job, type, master-CV hash, content hash, template/generator versions, and optional Drive ID. CV facts can be reordered by relevance but are not invented. DOCX is always the primary output. PDF is best-effort and never aborts a run if unavailable on Termux.
+
+## Configuration
+
+Copy `.env.example` to `.env`. Important safe defaults:
+
+- `HOST=127.0.0.1`, `PORT=8000` — local device only.
+- `DATABASE_PATH=data/job_agent.db`.
+- `APPLICATION_MODE=PREPARE`.
+- `TIMEZONE=Africa/Johannesburg`.
+- `GOOGLE_CREDENTIALS_FILE=data/secrets/credentials.json`.
+- `GOOGLE_GMAIL_AUTO_SEND=false`.
+
+Never commit `.env`, CVs, credentials, tokens, generated files, or logs.
+
+## Doctor and manual commands
+
+```bash
+source .venv/bin/activate
+python -m agents.cli doctor
 python -m agents.cli init-db
 python -m agents.cli run
 python -m agents.cli run --sample
-python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 pytest -q
 ```
 
-`--sample` inserts one clearly labelled, non-real example vacancy for end-to-end verification. Normal dashboard runs do not insert samples.
+`doctor` prints PASS/WARN/FAIL for Python, database/schema, folders, CV, configuration, Google credentials/token, scheduler, and sources without printing secrets. `--sample` inserts one non-real example only for verification.
 
-## Automatic versus human-controlled
+## Windows
 
-**Automatic:** permitted feed retrieval, parsing, deduplication, deterministic factual matching, score explanations, shortlisting, grounded document creation when a master CV exists, audit logging, scheduling, and CSV export.
+Install Python 3.12+, copy `.env.example` to `.env`, and double-click `START_JOB_AGENT.bat`. It keeps the original Windows dashboard/scheduler workflow and opens http://localhost:8000. Use `STOP_JOB_AGENT.bat` to stop its named windows. Desktop Playwright is optional:
 
-**Human/review required:** adding/reviewing source permissions; entering missing profile facts; validating every generated document; CAPTCHA/login/anti-bot flows; unsupported questions; final submission in default mode; and email sending unless explicitly enabled. The generic automation layer never guesses answers or submits merely because a score is high.
+```powershell
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt -r requirements-google.txt -r requirements-browser.txt
+playwright install chromium
+```
 
-## Project map
+## Linux
 
-- `backend/`: FastAPI, configuration, SQLite API
-- `agents/`: orchestrator, parsers, scoring, documents, scheduler
-- `job_sources/`: isolated connector interface and configured RSS/sample connectors
-- `applications/`: guarded browser/email preparation primitives and screenshot storage
-- `frontend/`: responsive local dashboard and first-run wizard
-- `config/`: editable candidate and search preferences
-- `cv/`: private master CV input
-- `generated_cvs/`, `cover_letters/`: generated application documents
-- `data/`, `logs/`: private runtime database/logs
-- `scripts/`: Windows launch and Task Scheduler helpers
-- `tests/`: core and HTTP integration tests
+Use Python 3.12+, create `.venv`, install `requirements.txt` and `requirements-google.txt`, run `python -m agents.cli init-db`, then start Uvicorn and `python -m agents.scheduler` as separate processes.
 
-## Email setup
+## Database upgrades and interrupted runs
 
-Enter SMTP variables in `.env`. Keep `EMAIL_AUTO_SEND=false` to prepare drafts only. Gmail accounts should use OAuth or an app password rather than the normal account password. Sending remains off unless explicitly enabled.
+Startup runs additive SQLite migrations; existing job/application history is retained. A run left `RUNNING` after process death becomes `INTERRUPTED` on next migration and is visible through the run API. Job/source uniqueness prevents restart duplicates. Interrupted runs can be discarded; restarting a run safely relies on deduplication. Granular within-source resume is not yet implemented.
 
-## Privacy and recovery
+## Tests and platform caveat
 
-Everything is local except requests to configured vacancy feeds and any services you explicitly enable. Back up `data/job_agent.db`, `config/`, and document folders. Secrets, CVs, logs, runtime databases, generated files, and screenshots are excluded from Git.
+CI tests Python 3.12/3.13, compileall, pytest, Ruff fatal errors, diff cleanliness, and shell syntax. Linux CI validates portable code and scripts, **not a physical Android device**. Run `./INSTALL_ANDROID.sh`, `doctor`, a sample ingestion, CV generation, OAuth, and API smoke tests on the target phone before treating a build as device-validated.

@@ -15,3 +15,11 @@ cover_letters/*
 applications/screenshots/*
 !applications/screenshots/.gitkeep
 playwright/.auth/
+credentials.json
+client_secret*.json
+google_token*.json
+tokens/
+secrets/
+data/tokens/
+data/secrets/
+runtime/

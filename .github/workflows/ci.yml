@@ -1,0 +1,19 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    strategy:
+      matrix:
+        python-version: ['3.12', '3.13']
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: '${{ matrix.python-version }}', cache: pip}
+      - run: pip install -r requirements.txt -r requirements-google.txt ruff
+      - run: python -m compileall -q backend agents applications integrations job_sources tests
+      - run: ruff check .
+      - run: pytest -q
+      - run: git diff --check
+      - name: Android script syntax (not device validation)
+        run: bash -n INSTALL_ANDROID.sh START_ANDROID.sh STOP_ANDROID.sh UPDATE_ANDROID.sh scripts/status_android.sh
