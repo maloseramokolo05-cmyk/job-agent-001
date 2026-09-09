@@ -1,4 +1,4 @@
-name: Probe Vercel preview
+name: Probe Vercel production
 on:
   push:
     branches:
@@ -9,18 +9,31 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for preview health
+      - name: Verify production health and access controls
         shell: bash
         run: |
           set -euo pipefail
-          base='https://tumelo-job-agent-2rbo2exjd-maloseramokolo05-3741s-projects.vercel.app'
-          for i in $(seq 1 18); do
+          base='https://tumelo-job-agent-h0d5c2dkg-maloseramokolo05-3741s-projects.vercel.app'
+          for i in $(seq 1 24); do
             code=$(curl -L -sS -o /tmp/health -w '%{http_code}' "$base/api/health" || true)
             echo "health attempt=$i status=$code body=$(cat /tmp/health 2>/dev/null || true)"
             if [ "$code" = "200" ]; then break; fi
             sleep 5
           done
           test "$code" = "200"
+
           ready_code=$(curl -L -sS -o /tmp/ready -w '%{http_code}' "$base/api/ready" || true)
           echo "ready status=$ready_code body=$(cat /tmp/ready 2>/dev/null || true)"
           test "$ready_code" = "200"
+
+          root_code=$(curl -L -sS -o /tmp/root -w '%{http_code}' "$base/" || true)
+          echo "root status=$root_code"
+          test "$root_code" = "200"
+
+          jobs_code=$(curl -L -sS -o /tmp/jobs -w '%{http_code}' "$base/api/jobs" || true)
+          echo "unauth jobs status=$jobs_code body=$(cat /tmp/jobs 2>/dev/null || true)"
+          test "$jobs_code" = "401"
+
+          cron_code=$(curl -L -sS -o /tmp/cron -w '%{http_code}' "$base/api/cron/search" || true)
+          echo "unauth cron status=$cron_code body=$(cat /tmp/cron 2>/dev/null || true)"
+          test "$cron_code" = "401"
