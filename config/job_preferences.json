@@ -5,5 +5,7 @@
   "application_mode": "PREPARE",
   "schedule_times": ["07:00", "13:00", "18:00"],
   "allow_other_sa_locations": true,
-  "search_feeds": []
+  "search_feeds": [],
+  "greenhouse_boards": [],
+  "lever_sites": []
 }

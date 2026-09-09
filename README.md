@@ -1,5 +1,22 @@
 # Tumelo Job Agent 2.0.0
 
+> **Release gate:** this checkout is suitable for local development, not Vercel production. Read
+> [the backend audit](BACKEND_AUDIT.md), [architecture](ARCHITECTURE.md), and
+> [production-readiness decision](PRODUCTION_READINESS.md). In particular, PostgreSQL and durable
+> workflow execution remain mandatory release blockers; no live E2E success is claimed.
+
+## Production security and storage
+
+Set `ADMIN_PASSWORD_HASH` to an Argon2id hash, use a randomly generated `SESSION_SECRET` of at least
+32 characters, and set `APP_ENV=production`. Production startup fails closed unless authentication
+is configured and `STORAGE_PROVIDER=s3`. S3-compatible credentials stay server-side; the bucket must
+be private. See `.env.example` for the variables actually consumed by this revision.
+
+The real-source adapters are Greenhouse public job boards, Lever public postings, and configured
+RSS/Atom-compatible feeds. Add Greenhouse board tokens under `greenhouse_boards` and Lever site names
+under `lever_sites` in preferences. Source URLs are treated as untrusted and guarded against private
+network access, redirects, oversized responses and unbounded waits.
+
 ## ANDROID QUICK START
 
 Install [Termux from F-Droid](https://f-droid.org/packages/com.termux/) rather than the obsolete Play Store build. In Termux:
