@@ -1,0 +1,36 @@
+name: Package deployment source
+on:
+  push:
+    branches:
+      - chatgpt/deployment-package
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: d2793985d5fd8c1733f9869649cd3a52d8bdcc01
+      - name: Build exact production package
+        run: |
+          mkdir -p deploy-src
+          cp -R api agents applications backend config frontend integrations job_sources deploy-src/
+          cp requirements.txt requirements-google.txt vercel.json deploy-src/
+          python - <<'PY'
+          import json, base64
+          from pathlib import Path
+          root=Path('deploy-src')
+          files=[]
+          for p in sorted(root.rglob('*')):
+              if p.is_file():
+                  data=base64.b64encode(p.read_bytes()).decode()
+                  files.append({'file': p.relative_to(root).as_posix(), 'data': data, 'encoding':'base64'})
+          Path('deployment-files.json').write_text(json.dumps(files,separators=(',',':')))
+          print('files',len(files),'bytes',Path('deployment-files.json').stat().st_size)
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deployment-files
+          path: deployment-files.json
+          if-no-files-found: error
