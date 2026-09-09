@@ -1,5 +1,5 @@
 import base64
-from email import message_from_bytes
+from email import message_from_bytes, policy
 
 from agents.models import Job
 from agents.repository import ingest
@@ -25,7 +25,7 @@ def test_gmail_message_can_attach_pdf():
         "Dear Hiring Team,\n\nPlease find my CV attached.",
         attachments=[{"filename": "Tumelo Ramokolo - Marketing Assistant - CV.pdf", "content": b"%PDF-test", "content_type": "application/pdf"}],
     )
-    message = message_from_bytes(base64.urlsafe_b64decode(raw.encode()))
+    message = message_from_bytes(base64.urlsafe_b64decode(raw.encode()), policy=policy.default)
     attachments = list(message.iter_attachments())
     assert len(attachments) == 1
     assert attachments[0].get_filename().endswith("CV.pdf")
