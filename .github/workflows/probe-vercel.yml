@@ -1,0 +1,26 @@
+name: Probe Vercel preview
+on:
+  push:
+    branches:
+      - chatgpt/deployment-package
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for preview health
+        shell: bash
+        run: |
+          set -euo pipefail
+          base='https://tumelo-job-agent-2rbo2exjd-maloseramokolo05-3741s-projects.vercel.app'
+          for i in $(seq 1 18); do
+            code=$(curl -L -sS -o /tmp/health -w '%{http_code}' "$base/api/health" || true)
+            echo "health attempt=$i status=$code body=$(cat /tmp/health 2>/dev/null || true)"
+            if [ "$code" = "200" ]; then break; fi
+            sleep 5
+          done
+          test "$code" = "200"
+          ready_code=$(curl -L -sS -o /tmp/ready -w '%{http_code}' "$base/api/ready" || true)
+          echo "ready status=$ready_code body=$(cat /tmp/ready 2>/dev/null || true)"
+          test "$ready_code" = "200"
