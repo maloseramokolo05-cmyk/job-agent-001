@@ -1,45 +1,31 @@
-import os
-
-from argon2 import PasswordHasher
 from fastapi.testclient import TestClient
 
-from backend.main import app
-from backend.security import password_matches
+from api.index import app
 
 
-def test_argon2_password_verification(monkeypatch):
-    monkeypatch.setenv("ADMIN_PASSWORD_HASH", PasswordHasher().hash("correct horse"))
-    assert password_matches("correct horse")
-    assert not password_matches("wrong")
-
-
-def test_login_session_csrf_and_logout(monkeypatch):
+def test_workspace_no_longer_requires_private_sign_in(monkeypatch):
+    # Legacy auth environment values may still exist in Vercel, but the production
+    # entrypoint intentionally ignores/removes the private sign-in layer.
     monkeypatch.setenv("ADMIN_USERNAME", "owner")
-    monkeypatch.setenv("ADMIN_PASSWORD_HASH", PasswordHasher().hash("valid password"))
+    monkeypatch.setenv("ADMIN_PASSWORD_HASH", "legacy-disabled")
     monkeypatch.setenv("SESSION_SECRET", "x" * 40)
     with TestClient(app) as client:
-        assert client.get("/api/jobs").status_code == 401
-        login = client.post("/api/auth/login", json={"username": "owner", "password": "valid password"})
-        assert login.status_code == 200
-        assert "HttpOnly" in login.headers["set-cookie"]
         assert client.get("/api/jobs").status_code == 200
-        assert client.post("/api/runs").status_code == 403
-        csrf = login.json()["csrf_token"]
-        assert client.post("/api/auth/logout", headers={"X-CSRF-Token": csrf}).status_code == 200
-        assert client.get("/api/jobs").status_code == 401
+        assert client.post("/api/auth/login", json={"username": "owner", "password": "anything"}).status_code == 404
+        assert client.post("/api/auth/logout").status_code == 404
+        assert client.get("/api/auth/session").status_code == 404
 
 
-def test_google_callback_is_public_but_other_google_routes_are_protected(monkeypatch):
-    monkeypatch.setenv("ADMIN_PASSWORD_HASH", PasswordHasher().hash("valid password"))
+def test_google_routes_remain_available_without_private_sign_in(monkeypatch):
+    monkeypatch.setenv("ADMIN_PASSWORD_HASH", "legacy-disabled")
     monkeypatch.setenv("SESSION_SECRET", "x" * 40)
     with TestClient(app) as client:
-        # Missing OAuth params should reach FastAPI validation rather than be blocked by app auth.
+        # Missing OAuth params should still reach FastAPI validation.
         assert client.get("/api/google/callback").status_code == 422
-        assert client.get("/api/google/status").status_code == 401
+        assert client.get("/api/google/status").status_code == 200
 
 
 def test_health_has_security_headers():
-    os.environ.pop("ADMIN_PASSWORD_HASH", None)
     with TestClient(app) as client:
         response = client.get("/api/health")
         assert response.headers["x-content-type-options"] == "nosniff"
