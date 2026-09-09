@@ -9,3 +9,7 @@ APScheduler>=3.10,<4
 python-multipart>=0.0.9,<1
 pytest>=8,<10
 httpx>=0.27,<1
+argon2-cffi>=23.1,<26
+itsdangerous>=2.2,<3
+boto3>=1.35,<2
+defusedxml>=0.7,<1

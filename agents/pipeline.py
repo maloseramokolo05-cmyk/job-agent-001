@@ -8,6 +8,8 @@ from agents.scoring import score_job
 from agents.documents import generate_cv
 from job_sources.sample import SampleSource
 from job_sources.rss import RSSSource
+from job_sources.greenhouse import GreenhouseSource
+from job_sources.lever import LeverSource
 log=logging.getLogger("job_agent")
 _lock=threading.Lock()
 def cv_text():
@@ -17,7 +19,7 @@ def run(include_sample=False):
  run_id=None
  try:
   with connect() as db: run_id=db.execute("INSERT INTO runs(started_at,state,message) VALUES(?,?,?)",(now(),"RUNNING","Starting search")).lastrowid
-  profile,prefs=load_profile(),load_preferences(); master=cv_text(); sources=[RSSSource()]+([SampleSource()] if include_sample else [])
+  profile,prefs=load_profile(),load_preferences(); master=cv_text(); sources=[GreenhouseSource(),LeverSource(),RSSSource()]+([SampleSource()] if include_sample else [])
   stats={"discovered":0,"duplicates":0,"analyzed":0,"strong_matches":0,"documents_prepared":0,"manual_required":0,"errors":0}
   maximum=env_int("MAX_JOBS_PER_RUN",100); threshold=float(prefs.get("minimum_score",75))
   for source in sources:
