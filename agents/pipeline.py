@@ -75,9 +75,8 @@ def run(include_sample=False):
         profile = load_profile()
         preferences = load_preferences()
         master = cv_text()
-        sources = [Careers24Source(), GreenhouseSource(), LeverSource(), RSSSource()]
-        if include_sample:
-            sources.append(SampleSource())
+        # Explicit sample mode is a deterministic developer/test path. Production rejects it at the API.
+        sources = [SampleSource()] if include_sample else [Careers24Source(), GreenhouseSource(), LeverSource(), RSSSource()]
         stats = {
             "discovered": 0,
             "duplicates": 0,
