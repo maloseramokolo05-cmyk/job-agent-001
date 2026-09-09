@@ -4,22 +4,25 @@ from datetime import datetime,timedelta,timezone
 from pathlib import Path
 from urllib.parse import urlencode
 import requests
-from backend.config import ROOT
-from backend.database import connect,now
+from backend.config import ROOT,app_base_url,storage_path
+from backend.database import connect
 from .models import FEATURE_SCOPES
 from .token_store import TokenStore
 AUTH_URL="https://accounts.google.com/o/oauth2/v2/auth"; TOKEN_URL="https://oauth2.googleapis.com/token"
 def client_config():
  cid=os.getenv("GOOGLE_CLIENT_ID",""); secret=os.getenv("GOOGLE_CLIENT_SECRET","")
- path=Path(os.getenv("GOOGLE_CREDENTIALS_FILE",ROOT/"data/secrets/credentials.json"))
+ configured=os.getenv("GOOGLE_CREDENTIALS_FILE","").strip()
+ path=Path(configured) if configured else storage_path("data","secrets","credentials.json")
+ if not path.is_absolute(): path=ROOT/path
  if path.exists():
   raw=json.loads(path.read_text(encoding="utf-8")); item=raw.get("web") or raw.get("installed") or {}; cid=cid or item.get("client_id",""); secret=secret or item.get("client_secret","")
  return cid,secret
 def scopes_for(features): return sorted({scope for feature in features for scope in FEATURE_SCOPES.get(feature,[])})
+def default_redirect_uri(): return os.getenv("GOOGLE_REDIRECT_URI","").strip() or f"{app_base_url()}/api/google/callback"
 def start_authorization(features,redirect_uri=None):
  cid,_=client_config()
  if not cid: raise ValueError("Google OAuth client is not configured")
- redirect_uri=redirect_uri or os.getenv("GOOGLE_REDIRECT_URI","http://127.0.0.1:8000/api/google/callback")
+ redirect_uri=redirect_uri or default_redirect_uri()
  state=secrets.token_urlsafe(32); verifier=secrets.token_urlsafe(64); challenge=base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode(); scopes=scopes_for(features)
  created=datetime.now(timezone.utc); expires=created+timedelta(minutes=10)
  with connect() as db: db.execute("INSERT INTO oauth_state VALUES(?,?,?,?,?,?)",(state,verifier,redirect_uri,json.dumps(scopes),created.isoformat(),expires.isoformat()))
