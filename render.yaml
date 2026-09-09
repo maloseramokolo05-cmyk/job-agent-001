@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: tumelo-job-agent
+    runtime: python
+    plan: free
+    region: frankfurt
+    buildCommand: pip install -r requirements.txt -r requirements-google.txt
+    startCommand: python -m uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: APP_DATA_DIR
+        value: /tmp/tumelo-job-agent
+      - key: APP_AUTH_ENABLED
+        value: "true"
+      - key: APP_USERNAME
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: APPLICATION_MODE
+        value: PREPARE
+      - key: TIMEZONE
+        value: Africa/Johannesburg
+      - key: GOOGLE_GMAIL_AUTO_SEND
+        value: "false"
