@@ -54,13 +54,17 @@ def ingest(job):
 
 
 def update_analysis(job_id, result, status):
+    stored_breakdown = {
+        "dimensions": result.get("breakdown", result.get("score_breakdown", {})),
+        "evidence": result.get("evidence", {}),
+    }
     with connect() as db:
         db.execute(
             "UPDATE jobs SET score=?,classification=?,score_breakdown=?,missing_requirements=?,reasoning=?,status=? WHERE id=?",
             (
                 result["score"],
                 result["classification"],
-                json.dumps(result.get("breakdown", result.get("score_breakdown", {}))),
+                json.dumps(stored_breakdown),
                 json.dumps(result.get("missing_requirements", [])),
                 result["reasoning"],
                 status,

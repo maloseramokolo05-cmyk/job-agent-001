@@ -8,8 +8,10 @@ from datetime import datetime, timedelta, timezone
 
 from backend.config import ROOT, env_int, load_preferences, load_profile
 from backend.database import connect, event, now, row
+from agents.candidate_fit import get_candidate_fit_profile, targeted_preferences
 from agents.cv_parser import find_master, parse_cv
 from agents.documents import generate_cv
+from agents.relevance_maintenance import rescore_existing
 from agents.repository import ingest, update_analysis
 from agents.scoring import score_job
 from applications.email_apply import apply_by_email
@@ -86,13 +88,19 @@ def run(include_sample=False):
         profile = load_profile()
         preferences = load_preferences()
         master = cv_text()
-        # Explicit sample mode is a deterministic developer/test path. Production rejects it at the API.
+        fit = get_candidate_fit_profile(profile, master)
+        search_preferences = targeted_preferences(preferences, fit)
+        existing_rescore = rescore_existing(profile, preferences, master, fit)
         sources = [SampleSource()] if include_sample else [Careers24Source(), GreenhouseSource(), LeverSource(), RSSSource()]
         stats = {
             "discovered": 0,
             "duplicates": 0,
             "analyzed": 0,
             "strong_matches": 0,
+            "low_relevance_filtered": 0,
+            "existing_jobs_rescored": existing_rescore["evaluated"],
+            "existing_jobs_downgraded": existing_rescore["downgraded"],
+            "existing_jobs_upgraded": existing_rescore["upgraded"],
             "documents_prepared": 0,
             "email_applications_sent": 0,
             "email_duplicates_prevented": 0,
@@ -101,7 +109,8 @@ def run(include_sample=False):
             "budget_exhausted": False,
         }
         maximum = env_int("MAX_JOBS_PER_RUN", 120)
-        threshold = float(preferences.get("minimum_score", 68))
+        threshold = max(70.0, float(preferences.get("minimum_score", 68)))
+        email_threshold = max(80.0, float(preferences.get("email_minimum_score", 72)))
         for source in sources:
             if stats["discovered"] >= maximum or time.monotonic() >= deadline - 10:
                 stats["budget_exhausted"] = time.monotonic() >= deadline - 10
@@ -116,7 +125,7 @@ def run(include_sample=False):
                             run_id,
                         ),
                     )
-                discovered = source.search(profile, preferences)
+                discovered = source.search(profile, search_preferences)
                 _source_status(source, "CONNECTED")
                 for job in discovered[: max(0, maximum - stats["discovered"])]:
                     if time.monotonic() >= deadline - 10:
@@ -127,16 +136,17 @@ def run(include_sample=False):
                     if duplicate:
                         stats["duplicates"] += 1
                         continue
-                    result = score_job(job.dict(), profile, preferences, master)
+                    result = score_job(job.dict(), profile, preferences, master, fit_profile=fit)
                     selected = result["score"] >= threshold
                     status = "SHORTLISTED" if selected else "DISCOVERED"
                     update_analysis(job_id, result, status)
                     stats["analyzed"] += 1
                     if not selected:
+                        stats["low_relevance_filtered"] += 1
                         continue
                     stats["strong_matches"] += 1
 
-                    if job.email_verified and job.application_email and master:
+                    if result["score"] >= email_threshold and job.email_verified and job.application_email and master:
                         try:
                             outcome = apply_by_email(job_id, master)
                             if outcome.get("sent"):
@@ -155,7 +165,7 @@ def run(include_sample=False):
                             stats["errors"] += 1
                     else:
                         reason = (
-                            "The vacancy uses a web application route or does not publish a verified application email. "
+                            "This vacancy passed the CV-fit threshold but requires review or a web application route. "
                             "Open the original application page and complete any login/human-verification step manually."
                         )
 
