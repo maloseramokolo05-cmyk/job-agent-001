@@ -4,11 +4,6 @@ import json
 import os
 import secrets
 
-# Production uses Google-owner authentication instead of a password. The
-# backend's existing production guard and security middleware use the presence
-# of ADMIN_PASSWORD_HASH as an "authentication enabled" marker, so provide a
-# non-secret sentinel before importing the backend. The password-login route is
-# removed below, therefore this value is never accepted as a user password.
 os.environ.setdefault("ADMIN_PASSWORD_HASH", "google-owner-auth-enabled")
 
 import requests
@@ -17,7 +12,10 @@ from fastapi.responses import JSONResponse, RedirectResponse
 
 from backend import main as backend_main
 from backend.config import load_profile
+from backend.database import LATEST_SCHEMA_VERSION, schema_version
+from backend.product_api import router as product_router
 from backend.security import COOKIE, CSRF_COOKIE, csrf_token, new_session, rate_limit, session_user
+from backend.storage import ObjectStorage
 from integrations.google.credentials import CredentialStore
 from integrations.google.oauth import (
     _redirect_uri,
@@ -28,14 +26,15 @@ from integrations.google.oauth import (
 )
 
 app = backend_main.app
+app.include_router(product_router)
 
-# The owner does not use an app-level password. Authentication is completed with
-# the Google account whose email matches the candidate profile. Remove the
-# legacy password-login route and replace the existing Google callback below.
+# Google-only owner authentication replaces the legacy password login and the
+# generic backend callback. Readiness is also replaced so it understands the
+# encrypted CredentialStore used by the current deployment.
 app.router.routes = [
     route
     for route in app.router.routes
-    if getattr(route, "path", None) not in {"/api/auth/login", "/api/google/callback"}
+    if getattr(route, "path", None) not in {"/api/auth/login", "/api/google/callback", "/api/ready"}
 ]
 app.middleware_stack = None
 
@@ -52,10 +51,6 @@ _PUBLIC_PATHS = {
 
 @app.on_event("startup")
 def migrate_google_bootstrap_credentials():
-    # Operators can place a one-time bootstrap JSON in Neon. On startup this is
-    # immediately encrypted with the deployment's existing secret and the
-    # plaintext bootstrap row is deleted. getattr keeps isolated tests that
-    # replace CredentialStore with a narrow fake from failing at app startup.
     store = CredentialStore()
     migrate = getattr(store, "migrate_bootstrap", None)
     if migrate:
@@ -80,13 +75,20 @@ async def _handle_google_bootstrap(request: Request):
     if request.method != "POST":
         return JSONResponse({"error": {"message": "Method not allowed"}}, status_code=405)
 
-    # Once credentials are stored, replacement is an owner-only action. This
-    # prevents an unauthenticated visitor from swapping the OAuth client.
-    if CredentialStore().configured() and not session_user(request.cookies.get(COOKIE)):
-        return JSONResponse(
-            {"error": {"code": "UNAUTHENTICATED", "message": "Owner authentication required"}},
-            status_code=401,
-        )
+    configured = CredentialStore().configured()
+    if configured:
+        if not session_user(request.cookies.get(COOKIE)):
+            return JSONResponse(
+                {"error": {"code": "UNAUTHENTICATED", "message": "Owner authentication required"}},
+                status_code=401,
+            )
+        if not secrets.compare_digest(
+            request.cookies.get(CSRF_COOKIE, ""), request.headers.get("X-CSRF-Token", "")
+        ):
+            return JSONResponse(
+                {"error": {"code": "CSRF_FAILED", "message": "CSRF validation failed"}},
+                status_code=403,
+            )
 
     rate_limit(f"google-bootstrap:{request.client.host if request.client else 'unknown'}")
     try:
@@ -101,13 +103,8 @@ async def _handle_google_bootstrap(request: Request):
         normalized = CredentialStore.normalize(raw)
         expected_redirect = _redirect_uri()
         if expected_redirect not in normalized.get("redirect_uris", []):
-            raise HTTPException(
-                400,
-                f"This Google client must include the redirect URI {expected_redirect}",
-            )
+            raise HTTPException(400, f"This Google client must include the redirect URI {expected_redirect}")
         CredentialStore().save(raw)
-        # Any token produced by an older/deleted OAuth client must not survive a
-        # credential replacement. The next Google sign-in creates a fresh token.
         disconnect()
         return JSONResponse({"saved": True, "redirect_uri": expected_redirect})
     except HTTPException as exc:
@@ -126,30 +123,46 @@ async def google_owner_guard(request: Request, call_next):
     user = session_user(request.cookies.get(COOKIE))
     if not public and not user:
         response = JSONResponse(
-            {"error": {"code": "UNAUTHENTICATED", "message": "Owner authentication required"}},
-            status_code=401,
+            {"error": {"code": "UNAUTHENTICATED", "message": "Owner authentication required"}}, status_code=401
         )
     elif (
         not public
         and request.method not in {"GET", "HEAD", "OPTIONS"}
         and not secrets.compare_digest(
-            request.cookies.get(CSRF_COOKIE, ""),
-            request.headers.get("X-CSRF-Token", ""),
+            request.cookies.get(CSRF_COOKIE, ""), request.headers.get("X-CSRF-Token", "")
         )
     ):
         response = JSONResponse(
-            {"error": {"code": "CSRF_FAILED", "message": "CSRF validation failed"}},
-            status_code=403,
+            {"error": {"code": "CSRF_FAILED", "message": "CSRF validation failed"}}, status_code=403
         )
     else:
         response = await call_next(request)
     return response
 
 
+@app.get("/api/ready")
+def ready():
+    try:
+        storage = ObjectStorage().healthy()
+    except Exception:
+        storage = False
+    database = schema_version() == LATEST_SCHEMA_VERSION
+    production = os.getenv("APP_ENV") == "production"
+    cron = bool(os.getenv("CRON_SECRET"))
+    google_configured = CredentialStore().configured()
+    body = {
+        "status": "ready" if storage and database and (not production or cron) and google_configured else "not_ready",
+        "database": database,
+        "storage": storage,
+        "scheduler_configured": cron,
+        "google_configured": google_configured,
+        "connectors": ["careers24", "greenhouse", "lever", "rss"],
+    }
+    return JSONResponse(body, 200 if body["status"] == "ready" else 503)
+
+
 @app.get("/api/google/callback")
 def owner_google_auth(request: Request, code: str | None = None, state: str | None = None):
-    # Opening this callback directly starts Google OAuth. Google's redirect back
-    # completes both owner sign-in and the Gmail/Drive/Calendar connection.
     if not code and not state:
         try:
             started = start_authorization(["identity", "gmail", "drive", "calendar"])
@@ -168,21 +181,17 @@ def owner_google_auth(request: Request, code: str | None = None, state: str | No
         complete_authorization(code, state)
     except Exception as exc:
         disconnect()
-        raise HTTPException(
-            400,
-            "Google token exchange failed. Reconnect using the current OAuth client and try again.",
-        ) from exc
+        raise HTTPException(400, "Google token exchange failed. Reconnect using the current OAuth client and try again.") from exc
 
     try:
         token = access_token()
         google_response = requests.get(
-            _GOOGLE_USERINFO_URL,
-            headers={"Authorization": f"Bearer {token}"},
-            timeout=20,
+            _GOOGLE_USERINFO_URL, headers={"Authorization": f"Bearer {token}"}, timeout=20
         )
         google_response.raise_for_status()
-        connected_email = str(google_response.json().get("email", "")).strip().lower()
-        email_verified = google_response.json().get("email_verified", True)
+        payload = google_response.json()
+        connected_email = str(payload.get("email", "")).strip().lower()
+        email_verified = payload.get("email_verified", True)
         if not connected_email or not email_verified:
             raise PermissionError("Google did not return a verified account email")
         if connected_email != expected_email:
@@ -192,31 +201,12 @@ def owner_google_auth(request: Request, code: str | None = None, state: str | No
         raise HTTPException(403, str(exc)) from exc
     except Exception as exc:
         disconnect()
-        raise HTTPException(
-            400,
-            "Google sign-in succeeded, but owner identity verification failed. Reconnect and try again.",
-        ) from exc
+        raise HTTPException(400, "Google sign-in succeeded, but owner identity verification failed. Reconnect and try again.") from exc
 
     session = new_session(expected_email)
     csrf = csrf_token()
     secure = os.getenv("APP_ENV") == "production"
     response = RedirectResponse("/#dashboard", status_code=302)
-    response.set_cookie(
-        COOKIE,
-        session,
-        httponly=True,
-        secure=secure,
-        samesite="strict",
-        max_age=43200,
-        path="/",
-    )
-    response.set_cookie(
-        CSRF_COOKIE,
-        csrf,
-        httponly=False,
-        secure=secure,
-        samesite="strict",
-        max_age=43200,
-        path="/",
-    )
+    response.set_cookie(COOKIE, session, httponly=True, secure=secure, samesite="strict", max_age=43200, path="/")
+    response.set_cookie(CSRF_COOKIE, csrf, httponly=False, secure=secure, samesite="strict", max_age=43200, path="/")
     return response
