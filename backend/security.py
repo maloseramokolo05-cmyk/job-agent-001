@@ -58,7 +58,10 @@ def session_user(token: str | None) -> str | None:
         return None
     try:
         value, signature = token.rsplit(".", 1)
-        username, expires, _ = value.split(".", 2)
+        # Parse from the right because the username is the owner email address and
+        # may itself contain dots (for example gmail.com). Splitting from the left
+        # makes a valid owner session immediately fail authentication.
+        username, expires, _ = value.rsplit(".", 2)
         if not hmac.compare_digest(signature, _signature(value)) or int(expires) < time.time():
             return None
         from backend.database import row
