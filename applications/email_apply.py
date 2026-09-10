@@ -4,6 +4,7 @@ import hashlib
 import os
 
 from agents.documents import generate_cv, read_document, safe_filename
+from applications.thresholds import effective_email_threshold
 from backend.config import load_preferences, load_profile
 from backend.database import connect, event, now, row
 from integrations.google.gmail import already_sent_application, send_message
@@ -58,7 +59,6 @@ def _subject(job, profile):
 
 
 def preview_email_application(job_id: int, master_cv_text: str):
-    """Re-verify an application route and return the exact proposed send without sending it."""
     job = row("SELECT * FROM jobs WHERE id=?", (job_id,))
     if not job:
         raise ValueError("Job not found")
@@ -66,9 +66,9 @@ def preview_email_application(job_id: int, master_cv_text: str):
     profile = load_profile()
     if not job.get("email_verified") or not job.get("application_email") or job.get("application_method") != "EMAIL":
         raise PermissionError("This vacancy does not have a verified published email application route")
-    minimum = float(preferences.get("email_minimum_score", 72))
+    minimum = effective_email_threshold(preferences)
     if float(job.get("score") or 0) < minimum:
-        raise PermissionError(f"Job score is below the automatic email threshold ({minimum:g})")
+        raise PermissionError(f"Job score is below the safe email threshold ({minimum:g})")
     if not master_cv_text.strip():
         raise ValueError("Verified master CV text is required before applying")
     existing = row(
@@ -79,10 +79,7 @@ def preview_email_application(job_id: int, master_cv_text: str):
         return {"eligible": False, "duplicate": True, "reason": "already_tracked"}
     _reverify_published_email(job)
     duplicate = already_sent_application(
-        job["application_email"],
-        job["title"],
-        "",
-        int(preferences.get("email_duplicate_window_days", 365)),
+        job["application_email"], job["title"], "", int(preferences.get("email_duplicate_window_days", 365))
     )
     if duplicate.get("duplicate"):
         return {
@@ -107,7 +104,6 @@ def preview_email_application(job_id: int, master_cv_text: str):
 
 
 def _reverify_published_email(job):
-    """Confirm the exact application email is still present on the original live vacancy page."""
     source_url = job.get("email_source_url") or job.get("vacancy_url")
     if not source_url:
         raise PermissionError("The verified vacancy source URL is missing")
@@ -129,7 +125,6 @@ def _reverify_published_email(job):
 
 
 def apply_by_email(job_id: int, master_cv_text: str, *, explicit_authorization: bool = False):
-    """Send one application only through a verified, still-live published email route."""
     job = row("SELECT * FROM jobs WHERE id=?", (job_id,))
     if not job:
         raise ValueError("Job not found")
@@ -146,9 +141,9 @@ def apply_by_email(job_id: int, master_cv_text: str, *, explicit_authorization: 
         raise PermissionError("Automatic email application is not enabled")
     if not job.get("email_verified") or not job.get("application_email") or job.get("application_method") != "EMAIL":
         raise PermissionError("This vacancy does not have a verified published email application route")
-    minimum = float(preferences.get("email_minimum_score", 72))
+    minimum = effective_email_threshold(preferences)
     if float(job.get("score") or 0) < minimum:
-        raise PermissionError(f"Job score is below the automatic email threshold ({minimum:g})")
+        raise PermissionError(f"Job score is below the safe email threshold ({minimum:g})")
     existing = row(
         "SELECT * FROM applications WHERE job_id=? AND status IN ('APPLIED','APPLIED_CONFIRMED','INTERVIEW','ASSESSMENT','OFFER') ORDER BY id DESC LIMIT 1",
         (job_id,),
@@ -157,13 +152,8 @@ def apply_by_email(job_id: int, master_cv_text: str, *, explicit_authorization: 
         return {"sent": False, "duplicate": True, "reason": "already_tracked", "application_id": existing["id"]}
 
     _reverify_published_email(job)
-    # Recipient is already constrained by the Gmail query, so duplicate matching uses the vacancy title rather than
-    # blocking every future role at the same company/recruitment mailbox.
     duplicate = already_sent_application(
-        job["application_email"],
-        job["title"],
-        "",
-        int(preferences.get("email_duplicate_window_days", 365)),
+        job["application_email"], job["title"], "", int(preferences.get("email_duplicate_window_days", 365))
     )
     if duplicate.get("duplicate"):
         with connect() as db:
@@ -171,14 +161,8 @@ def apply_by_email(job_id: int, master_cv_text: str, *, explicit_authorization: 
             cursor = db.execute(
                 "INSERT INTO applications(job_id,application_date,source,recruiter_email,google_message_id,status,notes,created_at) VALUES(?,?,?,?,?,?,?,?)",
                 (
-                    job_id,
-                    now(),
-                    job["source"],
-                    job["application_email"],
-                    duplicate.get("message_id"),
-                    "APPLIED_CONFIRMED",
-                    "Duplicate prevented: a matching sent Gmail application already exists.",
-                    now(),
+                    job_id, now(), job["source"], job["application_email"], duplicate.get("message_id"),
+                    "APPLIED_CONFIRMED", "Duplicate prevented: a matching sent Gmail application already exists.", now(),
                 ),
             )
             application_id = cursor.lastrowid
@@ -202,15 +186,8 @@ def apply_by_email(job_id: int, master_cv_text: str, *, explicit_authorization: 
         cursor = db.execute(
             "INSERT INTO applications(job_id,application_date,cv_version,source,recruiter_email,google_message_id,status,notes,created_at) VALUES(?,?,?,?,?,?,?,?,?)",
             (
-                job_id,
-                now(),
-                pdf_ref,
-                job["source"],
-                job["application_email"],
-                message_id,
-                "APPLIED",
-                f"Verified email application sent using email published on {job.get('email_source_url') or job.get('vacancy_url')}",
-                now(),
+                job_id, now(), pdf_ref, job["source"], job["application_email"], message_id, "APPLIED",
+                f"Verified email application sent using email published on {job.get('email_source_url') or job.get('vacancy_url')}", now(),
             ),
         )
         application_id = cursor.lastrowid
