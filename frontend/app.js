@@ -1,7 +1,7 @@
 const $ = s => document.querySelector(s);
 const esc = x => String(x ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const cookie = n => document.cookie.split('; ').find(x => x.startsWith(n + '='))?.split('=')[1] || '';
-const showLogin = () => { const d = $('#loginDialog'); if (d && !d.open) d.showModal(); };
+const showLogin = () => { const d = $('#loginDialog'); if (d && !d.open) d.showModal(); googleBootstrapStatus(); };
 const api = async (u, o = {}) => {
   o.headers = { ...(o.headers || {}) };
   if (!['GET', 'HEAD'].includes(o.method || 'GET')) o.headers['X-CSRF-Token'] = decodeURIComponent(cookie('job_agent_csrf'));
@@ -14,6 +14,36 @@ const api = async (u, o = {}) => {
 const json = (method, body) => ({ method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
 
 let activeJob = null;
+
+async function googleBootstrapStatus() {
+  const box = $('#googleBootstrapState');
+  if (!box) return;
+  try {
+    const r = await fetch('/api/google/bootstrap');
+    const d = await r.json();
+    box.textContent = d.stored_credentials
+      ? 'A Google OAuth file is stored securely. Upload another JSON only when replacing the Google client.'
+      : `Upload the Google OAuth JSON once. Required redirect: ${d.redirect_uri}`;
+  } catch (_) {
+    box.textContent = 'Google setup status could not be loaded.';
+  }
+}
+
+$('#uploadGoogleCredentials').onclick = async () => {
+  const input = $('#googleCredentialsFile'), state = $('#googleBootstrapState'), file = input?.files?.[0];
+  if (!file) { state.textContent = 'Choose the Google OAuth JSON file first.'; return; }
+  state.textContent = 'Saving Google credentials securely…';
+  const data = new FormData(); data.append('file', file);
+  try {
+    const r = await fetch('/api/google/bootstrap', {method:'POST', body:data});
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw Error(d.error?.message || 'Could not save Google credentials');
+    state.textContent = 'Saved. Opening Google sign-in…';
+    location.href = '/api/google/callback';
+  } catch (e) {
+    state.textContent = e.message;
+  }
+};
 
 $('#googleLogin').onclick = () => { location.href = '/api/google/callback'; };
 $('#menu').onclick = () => $('#nav').classList.toggle('open');
@@ -105,4 +135,5 @@ $('#form').onsubmit = async e => {
 };
 
 api('/api/health').then(h => { document.title = `Tumelo Job Agent ${h.version}`; if (!location.hash) location.hash = 'dashboard'; }).catch(() => {});
+googleBootstrapStatus();
 load();
