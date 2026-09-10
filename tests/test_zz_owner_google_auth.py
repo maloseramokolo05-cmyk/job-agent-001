@@ -4,14 +4,15 @@ from fastapi.testclient import TestClient
 
 
 class GoogleProfileResponse:
-    def __init__(self, email):
+    def __init__(self, email, verified=True):
         self.email = email
+        self.verified = verified
 
     def raise_for_status(self):
         return None
 
     def json(self):
-        return {"emailAddress": self.email}
+        return {"email": self.email, "email_verified": self.verified}
 
 
 def _entry():
@@ -114,15 +115,18 @@ def test_google_bootstrap_rejects_wrong_redirect(monkeypatch):
 
 def test_google_callback_without_params_starts_owner_sign_in(monkeypatch):
     entry = _entry()
-    monkeypatch.setattr(
-        entry,
-        "start_authorization",
-        lambda features: {"authorization_url": "https://accounts.google.test/owner", "state": "state"},
-    )
+    captured = []
+
+    def fake_start(features):
+        captured.extend(features)
+        return {"authorization_url": "https://accounts.google.test/owner", "state": "state"}
+
+    monkeypatch.setattr(entry, "start_authorization", fake_start)
     with TestClient(entry.app) as client:
         response = client.get("/api/google/callback", follow_redirects=False)
     assert response.status_code in {302, 307}
     assert response.headers["location"] == "https://accounts.google.test/owner"
+    assert "identity" in captured
 
 
 def test_wrong_google_account_is_rejected(monkeypatch):
@@ -135,6 +139,24 @@ def test_wrong_google_account_is_rejected(monkeypatch):
         entry.requests,
         "get",
         lambda *args, **kwargs: GoogleProfileResponse("someone-else@example.com"),
+    )
+    monkeypatch.setattr(entry, "disconnect", lambda: disconnected.append(True))
+    with TestClient(entry.app) as client:
+        response = client.get("/api/google/callback?code=code&state=state", follow_redirects=False)
+    assert response.status_code == 403
+    assert disconnected
+
+
+def test_unverified_google_email_is_rejected(monkeypatch):
+    entry = _entry()
+    disconnected = []
+    monkeypatch.setattr(entry, "load_profile", lambda: {"email": "maloseramokolo05@gmail.com"})
+    monkeypatch.setattr(entry, "complete_authorization", lambda code, state: {"connected": True})
+    monkeypatch.setattr(entry, "access_token", lambda: "access-token")
+    monkeypatch.setattr(
+        entry.requests,
+        "get",
+        lambda *args, **kwargs: GoogleProfileResponse("maloseramokolo05@gmail.com", verified=False),
     )
     monkeypatch.setattr(entry, "disconnect", lambda: disconnected.append(True))
     with TestClient(entry.app) as client:
