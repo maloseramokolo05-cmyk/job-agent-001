@@ -12,6 +12,7 @@ class CredentialStore:
     """Encrypted Google OAuth client credentials stored outside source control."""
 
     KEY = "secret:google_client"
+    BOOTSTRAP_KEY = "bootstrap:google_client"
 
     def __init__(self, path=None):
         self.path = Path(path or ROOT / "data/secrets/google_client.json")
@@ -64,11 +65,46 @@ class CredentialStore:
             pass
         return normalized
 
+    def migrate_bootstrap(self):
+        """Move a one-time DB bootstrap value into the encrypted credential store.
+
+        This exists so an operator can inject a Google OAuth JSON into Neon without
+        ever committing the client secret to GitHub or placing it in Vercel env.
+        The plaintext bootstrap row is deleted immediately after successful
+        encryption with the app's existing TOKEN_ENCRYPTION_KEY/SESSION_SECRET.
+        """
+        if not self._database_mode():
+            return None
+
+        from backend.database import execute, row
+
+        encrypted = row("SELECT value FROM settings WHERE key=?", (self.KEY,))
+        if encrypted:
+            return None
+
+        item = row("SELECT value FROM settings WHERE key=?", (self.BOOTSTRAP_KEY,))
+        if not item:
+            return None
+
+        try:
+            raw = json.loads(item["value"])
+            normalized = self.normalize(raw)
+        except Exception:
+            return None
+
+        self.save(raw)
+        TokenStore().clear()
+        execute("DELETE FROM settings WHERE key=?", (self.BOOTSTRAP_KEY,))
+        return normalized
+
     def load(self):
         if self._database_mode():
             from backend.database import row
 
             item = row("SELECT value FROM settings WHERE key=?", (self.KEY,))
+            if not item:
+                self.migrate_bootstrap()
+                item = row("SELECT value FROM settings WHERE key=?", (self.KEY,))
             if not item:
                 return None
             try:
