@@ -117,9 +117,9 @@ def _required_years(text: str) -> float | None:
     plain = _plain(text)
     values: list[float] = []
     patterns = (
-        r"(?:minimum(?: of)?\s*)?(\d{1,2})\s*\+?\s*(?:years|yrs)(?:['’]?)\s+(?:of\s+)?experience",
-        r"(\d{1,2})\s*[-–]\s*(\d{1,2})\s*(?:years|yrs)(?:['’]?)\s+(?:of\s+)?experience",
-        r"(?:at least|minimum of)\s*(\d{1,2})\s*(?:years|yrs)",
+        r"(\d{1,2})\s*[-–]\s*(\d{1,2})\s*(?:years|yrs)(?:['’]?)\b[^.\n]{0,45}?\bexperience\b",
+        r"(\d{1,2})\s*\+?\s*(?:years|yrs)(?:['’]?)\b[^.\n]{0,45}?\bexperience\b",
+        r"(?:at least|minimum(?: of)?)\s*(\d{1,2})\s*(?:years|yrs)\b",
     )
     for pattern in patterns:
         for match in re.finditer(pattern, plain):
@@ -132,15 +132,37 @@ def _required_years(text: str) -> float | None:
 def _mandatory_lines(text: str) -> list[str]:
     raw = unescape(str(text or ""))
     raw = re.sub(r"<br\s*/?>", "\n", raw, flags=re.I)
-    raw = re.sub(r"</(?:li|p|div|ul|ol)>", "\n", raw, flags=re.I)
+    raw = re.sub(r"</(?:li|p|div|ul|ol|h[1-6])>", "\n", raw, flags=re.I)
     raw = re.sub(r"<[^>]+>", " ", raw)
-    lines = []
-    for item in re.split(r"[\n\r]+|[•●✓✔]", raw):
-        line = re.sub(r"\s+", " ", item).strip(" -:\t")
-        lower = line.lower()
-        if 5 <= len(line) <= 300 and any(marker in lower for marker in ("must ", "required", "essential", "non-negotiable", "minimum", "valid driver's", "valid drivers", "own reliable", "own transport")):
+    cleaned = [re.sub(r"\s+", " ", item).strip(" -:\t") for item in re.split(r"[\n\r]+|[•●✓✔]", raw)]
+    section = False
+    lines: list[str] = []
+    start_headings = (
+        "requirements", "minimum requirements", "candidate requirements", "minimum qualification",
+        "minimum experience", "additional requirements", "qualifications", "what we're looking for",
+    )
+    stop_headings = (
+        "responsibilities", "key responsibilities", "job outputs", "what you'll do", "benefits", "offer",
+        "about us", "about the company", "why join", "who thrives", "similar jobs", "more jobs",
+    )
+    for line in cleaned:
+        if not line:
+            continue
+        lower = line.lower().strip()
+        normalized_heading = lower.rstrip(":")
+        if any(normalized_heading == heading for heading in start_headings):
+            section = True
+            continue
+        if any(normalized_heading == heading for heading in stop_headings):
+            section = False
+            continue
+        explicit = any(marker in lower for marker in (
+            "must ", "required", "essential", "non-negotiable", "minimum", "valid driver's",
+            "valid drivers", "own reliable", "own transport", "driver’s licence", "driver's licence",
+        ))
+        if 5 <= len(line) <= 300 and (explicit or section):
             lines.append(line)
-    return lines[:25]
+    return list(dict.fromkeys(lines))[:40]
 
 
 def _specialist_title_mismatch(title: str, fit: dict) -> str | None:
@@ -312,8 +334,18 @@ def score_job(job: dict, profile: dict, preferences: dict, cv_text: str = "", fi
     elif seniority == "senior" and candidate_years < 5:
         rejection_reasons.append("Senior-level title is above the verified career span.")
         total = min(total, 55.0)
-    elif seniority == "manager" and role_ratio < 0.75:
-        total = min(total, 58.0)
+    elif seniority == "manager":
+        cv_plain = _plain(cv_text)
+        title_plain = _plain(title)
+        direct_manager_evidence = any(
+            phrase in title_plain and phrase in cv_plain
+            for phrase in ("social media manager", "marketing manager", "content manager", "operations manager", "project manager", "brand manager")
+        )
+        if role_ratio < 0.75:
+            total = min(total, 58.0)
+        elif not direct_manager_evidence:
+            rejection_reasons.append("Manager-level title is above the candidate's stated target-role seniority.")
+            total = min(total, 69.0)
 
     candidate_evidence = _plain(cv_text + " " + " ".join(candidate_phrases) + " " + " ".join(fit.get("education", [])))
     for line in mandatory:
