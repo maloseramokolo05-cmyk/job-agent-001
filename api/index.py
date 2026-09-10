@@ -50,6 +50,14 @@ _PUBLIC_PATHS = {
 }
 
 
+@app.on_event("startup")
+def migrate_google_bootstrap_credentials():
+    # Operators can place a one-time bootstrap JSON in Neon. On startup this is
+    # immediately encrypted with the deployment's existing secret and the
+    # plaintext bootstrap row is deleted.
+    CredentialStore().migrate_bootstrap()
+
+
 def _owner_email() -> str:
     return str(load_profile().get("email", "")).strip().lower()
 
@@ -67,6 +75,14 @@ async def _handle_google_bootstrap(request: Request):
         return JSONResponse(_bootstrap_status())
     if request.method != "POST":
         return JSONResponse({"error": {"message": "Method not allowed"}}, status_code=405)
+
+    # Once credentials are stored, replacement is an owner-only action. This
+    # prevents an unauthenticated visitor from swapping the OAuth client.
+    if CredentialStore().configured() and not session_user(request.cookies.get(COOKIE)):
+        return JSONResponse(
+            {"error": {"code": "UNAUTHENTICATED", "message": "Owner authentication required"}},
+            status_code=401,
+        )
 
     rate_limit(f"google-bootstrap:{request.client.host if request.client else 'unknown'}")
     try:
