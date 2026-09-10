@@ -54,8 +54,12 @@ _PUBLIC_PATHS = {
 def migrate_google_bootstrap_credentials():
     # Operators can place a one-time bootstrap JSON in Neon. On startup this is
     # immediately encrypted with the deployment's existing secret and the
-    # plaintext bootstrap row is deleted.
-    CredentialStore().migrate_bootstrap()
+    # plaintext bootstrap row is deleted. getattr keeps isolated tests that
+    # replace CredentialStore with a narrow fake from failing at app startup.
+    store = CredentialStore()
+    migrate = getattr(store, "migrate_bootstrap", None)
+    if migrate:
+        migrate()
 
 
 def _owner_email() -> str:
