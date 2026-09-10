@@ -6,182 +6,139 @@
   <meta name="theme-color" content="#087443">
   <title>Tumelo Job Agent</title>
   <link rel="stylesheet" href="/assets/style.css">
+  <link rel="stylesheet" href="/assets/product.css">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" aria-label="Primary navigation">
-      <a class="brand" href="#dashboard" aria-label="Tumelo Job Agent home">
-        <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
-        <span><b>Tumelo Job Agent</b><small>More opportunities. A brighter tomorrow.</small></span>
-      </a>
-      <nav id="nav" aria-label="Main">
-        <a href="#dashboard" class="active"><span>⌂</span>Dashboard</a>
-        <a href="#jobs"><span>▣</span>Jobs</a>
-        <a href="#applications"><span>▤</span>Applications</a>
-        <a href="#documents"><span>▧</span>Documents</a>
-        <a href="#profile"><span>♙</span>Candidate Profile</a>
-        <a href="#google"><span>G</span>Google Integrations</a>
-        <a href="#sources"><span>↗</span>Sources</a>
-        <a href="#settings"><span>⚙</span>Settings</a>
-        <a href="#logs"><span>▥</span>Logs</a>
+  <div class="app-shell product-shell">
+    <aside class="sidebar product-sidebar" aria-label="Primary navigation">
+      <a class="brand" href="#dashboard"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span><span><b>Tumelo Job Agent</b><small>Find better-fit work faster</small></span></a>
+      <nav aria-label="Main">
+        <a href="#dashboard" data-route="dashboard"><span>⌂</span>Dashboard</a>
+        <a href="#jobs" data-route="jobs"><span>▣</span>Jobs</a>
+        <a href="#applications" data-route="applications"><span>▤</span>Applications</a>
+        <a href="#documents" data-route="documents"><span>▧</span>Documents</a>
+        <a href="#profile" data-route="profile"><span>♙</span>Profile</a>
       </nav>
-      <div class="sidebar-note">
-        <span class="leaf-mini">◆</span>
-        <b>Automate your job search.</b>
-        <p>Focus on what matters most.</p>
-        <div class="hills" aria-hidden="true"></div>
-      </div>
+      <div class="nav-divider"></div>
+      <nav aria-label="Secondary">
+        <a href="#integrations" data-route="integrations"><span>G</span>Integrations</a>
+        <a href="#settings" data-route="settings"><span>⚙</span>Settings</a>
+        <a href="#diagnostics" data-route="diagnostics"><span>◇</span>Diagnostics</a>
+      </nav>
+      <div class="sidebar-note compact-note"><b>Verified CV only</b><p>Every recommendation and application stays grounded in your master CV.</p></div>
     </aside>
 
-    <header class="topbar">
-      <button id="menu" class="icon-button mobile-menu" aria-label="Open navigation">☰</button>
+    <header class="topbar product-topbar">
       <div class="mobile-brand"><span class="brand-mark small" aria-hidden="true"><i></i><i></i></span><b>Tumelo Job Agent</b></div>
-      <label class="global-search" aria-label="Search jobs">
-        <span aria-hidden="true">⌕</span>
-        <input id="globalSearch" placeholder="Search jobs, companies or locations..." autocomplete="off">
-      </label>
+      <label class="global-search"><span>⌕</span><input id="globalSearch" placeholder="Search jobs, companies or locations" autocomplete="off"></label>
       <div class="top-actions">
-        <button class="icon-button" aria-label="Notifications"><span aria-hidden="true">♢</span><i class="notification-dot"></i></button>
-        <button class="profile-button" type="button" aria-label="Profile">
-          <span class="avatar">TR</span>
-          <span class="profile-copy"><b>Tumelo</b><small>Job seeker</small></span>
-          <span aria-hidden="true">⌄</span>
-        </button>
+        <button id="notificationButton" class="icon-button" aria-label="Open notifications">♢<i id="notificationDot" class="notification-dot" hidden></i></button>
+        <button id="profileButton" class="profile-button" type="button" aria-label="Open profile menu"><span class="avatar">TR</span><span class="profile-copy"><b>Tumelo</b><small>Job seeker</small></span><span>⌄</span></button>
       </div>
     </header>
 
-    <main>
-      <section id="dashboard" class="page-section dashboard-section">
-        <div class="hero">
-          <div class="hero-copy">
-            <p class="eyebrow" id="greeting">GOOD MORNING, TUMELO</p>
-            <h1>Find, tailor and apply.</h1>
-            <p class="lead">Let AI handle the heavy lifting, so you can focus on your next opportunity.</p>
+    <main id="mainContent">
+      <section id="dashboard" class="page-view active-page" data-page="dashboard">
+        <div class="welcome-row"><div><p class="eyebrow" id="greeting">GOOD AFTERNOON, TUMELO</p><h1>Here’s what needs your attention.</h1><p class="lead">Your strongest opportunities, next actions and application progress in one place.</p></div><button id="run" class="primary run-button"><span>▶</span><span id="runLabel">Run Job Search</span></button></div>
+
+        <div id="runProgress" class="run-progress hidden" role="status" aria-live="polite">
+          <div class="run-progress-head"><div><b id="runMessage">Starting search…</b><small id="runElapsed">0s elapsed</small></div><span id="runState" class="state-chip">RUNNING</span></div>
+          <div class="progress-track"><i id="runBar"></i></div>
+          <div id="runStats" class="run-stats"></div>
+          <div id="interruptedActions" class="actions hidden"></div>
+        </div>
+
+        <div id="dashboardMetrics" class="metrics product-metrics"><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div></div>
+
+        <div class="product-grid">
+          <section class="panel action-panel"><div class="sectionhead"><div><p class="eyebrow">YOUR NEXT ACTIONS</p><h2>What to do next</h2></div><a href="#applications" class="text-link">View all →</a></div><div id="nextActions" class="action-list loading-block">Loading actions…</div></section>
+          <section class="panel top-panel"><div class="sectionhead"><div><p class="eyebrow">BEST FITS</p><h2>Top Matches</h2></div><a href="#jobs" class="text-link">View jobs →</a></div><div id="topMatches" class="compact-jobs loading-block">Loading matches…</div></section>
+        </div>
+
+        <div class="summary-strip">
+          <a href="#integrations" class="summary-card"><span>G</span><div><small>Google</small><b id="googleSummaryText">Checking…</b></div></a>
+          <a href="#applications" class="summary-card"><span>✉</span><div><small>Employer replies</small><b id="replySummary">Checking…</b></div></a>
+          <a href="#applications" class="summary-card"><span>◷</span><div><small>Next interview</small><b id="interviewSummary">None scheduled</b></div></a>
+          <div class="summary-card"><span>↻</span><div><small>Last search</small><b id="lastRunSummary">Checking…</b></div></div>
+        </div>
+      </section>
+
+      <section id="jobs" class="page-view" data-page="jobs">
+        <div class="page-title"><div><p class="eyebrow">OPPORTUNITIES</p><h1>Jobs</h1><p class="section-copy">Only relevant roles are shown by default.</p></div><button class="primary compact-button" id="runFromJobs">Run search</button></div>
+        <div class="panel filter-panel">
+          <label class="search-field"><span>⌕</span><input id="jobSearch" placeholder="Search role, company or location"></label>
+          <div class="filter-row">
+            <label>Minimum match<select id="minScore"><option value="65">65%+</option><option value="70">70%+</option><option value="75" selected>75%+</option><option value="80">80%+</option><option value="90">90%+</option></select></label>
+            <label>Work style<select id="workMode"><option value="all">All</option><option value="remote">Remote</option><option value="hybrid">Hybrid</option><option value="on-site">On-site</option></select></label>
+            <label>Status<select id="jobStatus"><option value="">All</option><option value="SHORTLISTED">Shortlisted</option><option value="PREPARED">CV ready</option><option value="READY_TO_APPLY">Ready to apply</option><option value="NEEDS_USER_ACTION">Action needed</option><option value="APPLIED">Applied</option><option value="INTERVIEW">Interview</option></select></label>
+            <label>Sort<select id="jobSort"><option value="score">Best match</option><option value="newest">Newest</option><option value="closing">Closing soon</option></select></label>
           </div>
-          <div class="hero-action">
-            <button id="run" class="primary run-button"><span aria-hidden="true">▶</span> Run RSA Job Search</button>
-            <small>Search • Tailor • Prepare • Apply</small>
-          </div>
-          <div class="city-art" aria-hidden="true"><div class="sun"></div><div class="ridge ridge-one"></div><div class="ridge ridge-two"></div><div class="tower"></div><div class="skyline"></div></div>
         </div>
-
-        <div id="progress" class="progress hidden" role="status" aria-live="polite">
-          <div><b id="runmsg">Starting…</b><span id="runstate">RUNNING</span></div>
-          <i></i>
-        </div>
-
-        <div class="metrics" id="metrics" aria-label="Job search overview"></div>
-
-        <div class="dashboard-grid">
-          <section class="panel top-matches-card">
-            <div class="sectionhead"><div><p class="eyebrow">BEST FITS</p><h2>Top Matches</h2></div><a href="#jobs" class="text-link">View all →</a></div>
-            <div id="topMatches" class="compact-jobs"></div>
-          </section>
-
-          <section class="panel pipeline-card">
-            <div class="sectionhead"><div><p class="eyebrow">PROGRESS</p><h2>Application Pipeline</h2></div></div>
-            <div id="pipeline" class="pipeline"></div>
-          </section>
-
-          <section class="panel integration-card">
-            <div class="sectionhead"><div><p class="eyebrow">CONNECTED TOOLS</p><h2>Google Integrations</h2></div><a href="#google" class="text-link">Manage →</a></div>
-            <div id="googleSummary" class="integration-list"></div>
-          </section>
-
-          <section class="panel activity-card">
-            <div class="sectionhead"><div><p class="eyebrow">LATEST</p><h2>Recent Activity</h2></div></div>
-            <div id="recentActivity" class="activity-list"></div>
-          </section>
-        </div>
+        <div class="list-head"><b id="jobCount">0 jobs</b><button id="mobileFilters" class="secondary mobile-only">Filters</button></div>
+        <div id="jobcards" class="job-list loading-block">Loading jobs…</div>
       </section>
 
-      <section class="panel page-section" id="jobs">
-        <div class="sectionhead jobs-head"><div><p class="eyebrow">OPPORTUNITIES</p><h2>Jobs</h2><p class="section-copy">Review your latest matches and focus on the strongest opportunities first.</p></div><span id="jobCount" class="count-badge">0 jobs</span></div>
-        <div class="job-toolbar">
-          <label class="search-field"><span>⌕</span><input id="search" placeholder="Search roles, companies or locations"></label>
-          <label class="select-field">Status<select id="status"><option value="">All statuses</option><option>SHORTLISTED</option><option>PREPARED</option><option>NEEDS_USER_ACTION</option><option>APPLIED</option><option>APPLIED_CONFIRMED</option><option>INTERVIEW</option></select></label>
-          <button class="secondary filter-button" id="filterToggle">Filters</button>
-        </div>
-        <div id="filters" class="filter-chips" aria-label="Work style filters">
-          <button class="chip active" data-mode="all">All</button><button class="chip" data-mode="remote">Remote</button><button class="chip" data-mode="hybrid">Hybrid</button><button class="chip" data-mode="on-site">On-site</button>
-        </div>
-        <div id="jobcards" class="job-list"></div>
-        <div id="empty" class="empty-state"><span>⌕</span><h3>No matching jobs yet</h3><p>Run an RSA job search or adjust your filters to discover more opportunities.</p><button class="primary" onclick="document.querySelector('#run').click()">Run job search</button></div>
+      <section id="applications" class="page-view" data-page="applications">
+        <div class="page-title"><div><p class="eyebrow">APPLICATIONS</p><h1>Application workspace</h1><p class="section-copy">See what needs action, what is ready and what has been submitted.</p></div><a class="button secondary" href="/api/export.csv">Export CSV</a></div>
+        <div class="tabs" id="applicationTabs"><button data-tab="action" class="active">Action Required</button><button data-tab="submitted">Submitted</button><button data-tab="interviews">Interviews</button><button data-tab="closed">Closed</button></div>
+        <div id="applicationList" class="record-list loading-block">Loading applications…</div>
+        <section class="panel inbox-panel"><div class="sectionhead"><div><p class="eyebrow">EMPLOYER RESPONSES</p><h2>Job-related Gmail</h2></div><button id="syncGmail" class="secondary">Sync Gmail</button></div><div id="inboxList" class="record-list"></div></section>
       </section>
 
-      <section class="panel page-section" id="applications">
-        <div class="sectionhead"><div><p class="eyebrow">APPLICATION CRM</p><h2>Applications</h2><p class="section-copy">Everything you have prepared, sent or need to follow up.</p></div><a class="button secondary" href="/api/export.csv">Export CSV</a></div>
-        <div id="applicationList" class="record-list"></div>
+      <section id="documents" class="page-view" data-page="documents">
+        <div class="page-title"><div><p class="eyebrow">DOCUMENTS</p><h1>Your application files</h1><p class="section-copy">Grouped by job so tailored CVs and cover letters stay easy to find.</p></div></div>
+        <div id="masterCvState" class="panel cv-state"></div>
+        <div id="documentGroups" class="document-groups loading-block">Loading documents…</div>
       </section>
 
-      <section class="panel page-section" id="documents">
-        <div class="sectionhead"><div><p class="eyebrow">PRIVATE FILES</p><h2>Documents</h2><p class="section-copy">Your master CV and job-specific documents in one place.</p></div></div>
-        <div id="documentList" class="document-grid"></div>
+      <section id="profile" class="page-view" data-page="profile">
+        <div class="page-title"><div><p class="eyebrow">CANDIDATE PROFILE</p><h1>Your verified profile</h1><p class="section-copy">Your master CV remains the factual source used for applications.</p></div><button id="editProfile" class="primary compact-button">Edit profile</button></div>
+        <div id="profileSummary" class="profile-grid loading-block">Loading profile…</div>
       </section>
 
-      <section class="panel page-section" id="profile">
-        <div class="sectionhead"><div><p class="eyebrow">FACTUAL AUTHORITY</p><h2>Candidate Profile</h2><p class="section-copy">The verified master CV remains the source of truth for every application.</p></div><button id="setup" class="primary compact-button">Edit profile</button></div>
-        <div id="profileSummary" class="profile-grid"></div>
-        <div id="masterCvState" class="cv-state"></div>
-      </section>
-
-      <section class="panel page-section" id="google">
-        <div class="sectionhead"><div><p class="eyebrow">APPLICATION EMAIL</p><h2>Google Integrations</h2><p class="section-copy">Connect the tools used to send applications, store documents and manage interviews.</p></div></div>
-        <div id="googleState" class="status-banner"></div>
+      <section id="integrations" class="page-view" data-page="integrations">
+        <div class="page-title"><div><p class="eyebrow">INTEGRATIONS</p><h1>Google tools</h1><p class="section-copy">Gmail for applications and replies, Drive for documents, Calendar for interviews.</p></div></div>
+        <div id="googleState" class="status-banner">Checking Google connection…</div>
         <div id="googleCards" class="integration-cards"></div>
-        <div class="actions"><button id="connectGoogle" class="primary">Connect / Reconnect Google</button><button id="syncGmail" class="secondary">Sync Gmail</button><button id="disconnectGoogle" class="danger">Disconnect</button></div>
+        <div class="actions"><button id="connectGoogle" class="primary">Connect / Reconnect Google</button><button id="disconnectGoogle" class="danger">Disconnect Google</button></div>
+        <div class="integration-workspace"><section class="panel"><div class="sectionhead"><h2>Gmail</h2><button id="syncGmailIntegrations" class="secondary">Sync now</button></div><div id="gmailStatus"></div></section><section class="panel"><div class="sectionhead"><h2>Drive</h2><button id="refreshDrive" class="secondary">Refresh</button></div><div id="driveFiles"></div></section></div>
       </section>
 
-      <section class="panel page-section" id="sources">
-        <div class="sectionhead"><div><p class="eyebrow">SOUTH AFRICA DISCOVERY</p><h2>Sources</h2><p class="section-copy">See which job sources are currently available to the agent.</p></div></div>
-        <div id="sourceList" class="record-list"></div>
+      <section id="settings" class="page-view" data-page="settings">
+        <div class="page-title"><div><p class="eyebrow">SETTINGS</p><h1>Job Agent preferences</h1><p class="section-copy">Control relevance, locations, preparation and schedules without touching code.</p></div></div>
+        <form id="settingsForm" class="settings-form panel">
+          <fieldset><legend>Job search</legend><label>Minimum visible score<input name="minimum_score" type="number" min="0" max="100"></label><label>Preferred locations<input name="priority_locations" placeholder="Pretoria, Centurion, Midrand"></label><label>Target role families<input name="job_categories" placeholder="Marketing, Digital Marketing, Admin"></label><label class="check"><input name="allow_other_sa_locations" type="checkbox"> Allow suitable jobs elsewhere in South Africa</label></fieldset>
+          <fieldset><legend>Applications</legend><label>Email application threshold<input name="email_minimum_score" type="number" min="80" max="100"></label><label>Duplicate-check window (days)<input name="email_duplicate_window_days" type="number" min="1"></label><label>Mode<select name="application_mode"><option value="DISCOVER_ONLY">Discover only</option><option value="PREPARE">Prepare documents</option><option value="ASSISTED_APPLY">Assisted apply</option><option value="AUTO_EMAIL">Automatically send eligible email applications</option></select></label></fieldset>
+          <fieldset><legend>Automation</legend><label>Search times (SAST)<input name="schedule_times" placeholder="07:00, 12:00, 17:00"></label><div class="safe-note">Browser logins, CAPTCHA, OTP and MFA always stay manual. Email applications require a verified vacancy email and duplicate checks.</div></fieldset>
+          <button id="saveSettings" class="primary">Save settings</button>
+        </form>
       </section>
 
-      <section class="panel page-section" id="schedules">
-        <p class="eyebrow">AFRICA / JOHANNESBURG</p><h2>Schedules</h2><p class="section-copy">Automatic search times configured for your job agent.</p><div id="scheduleList" class="schedule-list"></div>
-      </section>
-
-      <section class="panel page-section" id="settings">
-        <p class="eyebrow">AUTOMATION RULES</p><h2>Settings</h2>
-        <div class="notice"><b>Safe automation</b><p>Automatic email applications are only sent when the original vacancy publishes a verified email address, your match clears the configured threshold, Gmail shows no duplicate application, and a verified master CV is available. Login, CAPTCHA, OTP and MFA applications stay marked as <b>Needs User Action</b>.</p></div>
-      </section>
-
-      <section class="panel page-section" id="logs">
-        <p class="eyebrow">DIAGNOSTICS</p><h2>Recent logs</h2><pre id="logLines"></pre>
+      <section id="diagnostics" class="page-view" data-page="diagnostics">
+        <div class="page-title"><div><p class="eyebrow">ADVANCED</p><h1>Diagnostics</h1><p class="section-copy">Health information for troubleshooting without exposing secrets.</p></div><button id="refreshDiagnostics" class="secondary">Refresh</button></div>
+        <div id="diagnosticCards" class="metrics"></div>
+        <section class="panel"><div class="sectionhead"><h2>Job sources</h2></div><div id="sourceList" class="record-list"></div></section>
+        <section class="panel"><div class="sectionhead"><h2>Latest search</h2></div><pre id="latestRunDetails">Loading…</pre></section>
       </section>
     </main>
 
-    <nav class="mobile-nav" aria-label="Mobile navigation">
-      <a href="#dashboard" class="active"><span>⌂</span><small>Home</small></a>
-      <a href="#jobs"><span>▣</span><small>Jobs</small></a>
-      <a href="#applications"><span>▤</span><small>Applications</small></a>
-      <a href="#profile"><span>♙</span><small>Profile</small></a>
-    </nav>
+    <nav class="mobile-nav" aria-label="Mobile navigation"><a href="#dashboard" data-route="dashboard"><span>⌂</span><small>Home</small></a><a href="#jobs" data-route="jobs"><span>▣</span><small>Jobs</small></a><a href="#applications" data-route="applications"><span>▤</span><small>Applications</small></a><a href="#profile" data-route="profile"><span>♙</span><small>Profile</small></a></nav>
   </div>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-  <dialog id="loginDialog" class="auth-dialog">
-    <div class="auth-brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span><div><b>Tumelo Job Agent</b><small>Private owner workspace</small></div></div>
-    <h2>Welcome back</h2>
-    <p>Continue with the Google account linked to your Job Agent.</p>
-    <button id="googleLogin" class="primary google-button">G&nbsp;&nbsp; Continue with Google</button>
-    <details id="googleBootstrap">
-      <summary>First-time Google setup</summary>
-      <p><small>Upload the OAuth JSON downloaded from Google Cloud once. It is stored securely and never displayed again.</small></p>
-      <label>Google OAuth JSON<input id="googleCredentialsFile" type="file" accept=".json,application/json"></label>
-      <button id="uploadGoogleCredentials" class="secondary">Upload JSON & continue</button>
-      <small id="googleBootstrapState"></small>
-    </details>
-    <p id="loginError" class="error-text" role="alert"></p>
-  </dialog>
+  <dialog id="loginDialog" class="auth-dialog"><div class="auth-brand"><span class="brand-mark" aria-hidden="true"><i></i><i></i></span><div><b>Tumelo Job Agent</b><small>Private owner workspace</small></div></div><h2>Sign in</h2><p>Continue with the Google account linked to your Job Agent.</p><button id="googleLogin" class="primary google-button">G&nbsp;&nbsp; Continue with Google</button><details id="googleBootstrap"><summary>First-time Google setup</summary><p><small>Upload the OAuth JSON once. It is stored securely and never displayed again.</small></p><label>Google OAuth JSON<input id="googleCredentialsFile" type="file" accept=".json,application/json"></label><button id="uploadGoogleCredentials" class="secondary">Upload JSON & continue</button><small id="googleBootstrapState"></small></details><p id="loginError" class="error-text" role="alert"></p></dialog>
 
-  <dialog id="detailModal" class="detail-dialog"><button class="close" aria-label="Close">×</button><div id="detail"></div></dialog>
+  <dialog id="jobDialog" class="detail-dialog"><button class="close" data-close="jobDialog" aria-label="Close">×</button><div id="jobDetail"></div></dialog>
+  <dialog id="notificationDialog" class="menu-dialog"><button class="close" data-close="notificationDialog" aria-label="Close">×</button><h2>Notifications</h2><div id="notificationList"></div></dialog>
+  <dialog id="profileMenu" class="menu-dialog"><button class="close" data-close="profileMenu" aria-label="Close">×</button><div class="menu-profile"><span class="avatar">TR</span><div><b>Tumelo Ramokolo</b><small>Owner</small></div></div><a href="#profile">View profile</a><a href="#settings">Settings</a><a href="#integrations">Google integrations</a><button id="logout" class="danger">Sign out</button></dialog>
 
-  <dialog id="wizard" class="wizard-dialog"><button class="close" aria-label="Close">×</button><p class="eyebrow">PROFILE SETUP</p><h2>Job Agent setup</h2><form id="form">
-    <label>Name<input name="name" required></label><label>Email<input name="email" type="email"></label><label>Phone<input name="phone"></label><label>Location<input name="location"></label><label>Work authorisation<input name="work_authorization" placeholder="Leave blank if not verified"></label><label>Skills (comma-separated)<textarea name="skills"></textarea></label><label>Target roles<input name="categories"></label><label>Preferred locations<input name="locations"></label><label>Expected salary<input name="salary"></label><label>Minimum match score<input name="score" type="number" min="0" max="100"></label><label>Schedule times (SAST)<input name="schedule"></label><label>Mode<select name="mode"><option>AUTO_EMAIL</option><option>PREPARE</option><option>DISCOVER_ONLY</option><option>ASSISTED_APPLY</option></select></label><label class="full-field">Upload master CV<input name="cv" type="file" accept=".pdf,.docx"></label><button class="primary full-field">Save setup</button>
-  </form></dialog>
+  <dialog id="profileEditor" class="wizard-dialog"><button class="close" data-close="profileEditor" aria-label="Close">×</button><p class="eyebrow">PROFILE</p><h2>Edit candidate profile</h2><form id="profileForm"><label>Name<input name="name" required></label><label>Email<input name="email" type="email"></label><label>Phone<input name="phone"></label><label>Location<input name="location"></label><label>Work authorisation<input name="work_authorization"></label><label>Salary expectation<input name="salary"></label><label class="full-field">Skills<textarea name="skills" placeholder="Comma-separated"></textarea></label><label class="full-field">Target roles<input name="categories"></label><label class="full-field">Preferred locations<input name="locations"></label><label class="full-field">Replace master CV<input name="cv" type="file" accept=".pdf,.docx"></label><button class="primary full-field">Save profile</button></form></dialog>
 
-  <script src="/assets/app.js"></script>
+  <dialog id="confirmDialog" class="menu-dialog"><h2 id="confirmTitle">Confirm action</h2><p id="confirmText"></p><div class="actions"><button id="confirmCancel" class="secondary">Cancel</button><button id="confirmOk" class="primary">Confirm</button></div></dialog>
+
+  <dialog id="interviewDialog" class="wizard-dialog"><button class="close" data-close="interviewDialog" aria-label="Close">×</button><h2>Add interview to Calendar</h2><form id="interviewForm"><label>Company<input name="company" required></label><label>Role<input name="role" required></label><label>Date<input name="date" type="date" required></label><label>Start time<input name="start" type="time" required></label><label>End time<input name="end" type="time" required></label><label>Location / meeting link<input name="location"></label><label class="full-field">Notes<textarea name="notes"></textarea></label><button class="primary full-field">Add to Calendar</button></form></dialog>
+
+  <script src="/assets/app-v2.js"></script>
 </body>
 </html>
