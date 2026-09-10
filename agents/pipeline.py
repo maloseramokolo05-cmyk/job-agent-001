@@ -11,6 +11,7 @@ from backend.database import connect, event, now, row
 from agents.candidate_fit import get_candidate_fit_profile, targeted_preferences
 from agents.cv_parser import find_master, parse_cv
 from agents.documents import generate_cv
+from agents.relevance_maintenance import rescore_existing
 from agents.repository import ingest, update_analysis
 from agents.scoring import score_job
 from applications.email_apply import apply_by_email
@@ -89,7 +90,7 @@ def run(include_sample=False):
         master = cv_text()
         fit = get_candidate_fit_profile(profile, master)
         search_preferences = targeted_preferences(preferences, fit)
-        # Explicit sample mode is a deterministic developer/test path. Production rejects it at the API.
+        existing_rescore = rescore_existing(profile, preferences, master, fit)
         sources = [SampleSource()] if include_sample else [Careers24Source(), GreenhouseSource(), LeverSource(), RSSSource()]
         stats = {
             "discovered": 0,
@@ -97,6 +98,9 @@ def run(include_sample=False):
             "analyzed": 0,
             "strong_matches": 0,
             "low_relevance_filtered": 0,
+            "existing_jobs_rescored": existing_rescore["evaluated"],
+            "existing_jobs_downgraded": existing_rescore["downgraded"],
+            "existing_jobs_upgraded": existing_rescore["upgraded"],
             "documents_prepared": 0,
             "email_applications_sent": 0,
             "email_duplicates_prevented": 0,
@@ -105,9 +109,6 @@ def run(include_sample=False):
             "budget_exhausted": False,
         }
         maximum = env_int("MAX_JOBS_PER_RUN", 120)
-        # 70 is the minimum preparation threshold. Lower-scoring jobs can stay
-        # in the database for audit/history but must not enter the preparation
-        # workflow automatically.
         threshold = max(70.0, float(preferences.get("minimum_score", 68)))
         email_threshold = max(80.0, float(preferences.get("email_minimum_score", 72)))
         for source in sources:
@@ -145,9 +146,6 @@ def run(include_sample=False):
                         continue
                     stats["strong_matches"] += 1
 
-                    # Only the strongest verified-fit vacancies may enter the
-                    # email route automatically. Existing first-send/duplicate
-                    # safeguards inside apply_by_email remain unchanged.
                     if result["score"] >= email_threshold and job.email_verified and job.application_email and master:
                         try:
                             outcome = apply_by_email(job_id, master)
