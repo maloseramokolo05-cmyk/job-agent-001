@@ -24,9 +24,6 @@ STOP = {
     "must", "minimum", "preferred", "essential", "responsibilities", "responsibility", "including", "knowledge",
 }
 
-# These are professions where generic transferable-skill overlap must never
-# masquerade as job fit. A candidate can still match an adjacent support role
-# when the specialist profession is not the actual job title.
 UNSUPPORTED_TITLE_PROFESSIONS = {
     "finance_advisory": ("financial advisor", "financial adviser", "wealth specialist", "wealth advisor", "investment advisor"),
     "accounting": ("accountant", "chartered accountant", "bookkeeper", "tax accountant", "audit manager"),
@@ -109,8 +106,6 @@ def _seniority(title: str) -> str:
         if re.search(rf"\b{level}\b", text):
             return level
     if "executive" in text:
-        # Sales/Account Executive is often an individual-contributor title, but
-        # Executive Assistant is not executive-level management.
         if "assistant" not in text and any(x in text for x in ("chief", "executive director", "executive manager")):
             return "executive"
     if "mid-level" in text or "mid level" in text:
@@ -181,7 +176,7 @@ def _qualification_alignment(body: str, fit: dict, mandatory: list[str]) -> tupl
         base = 1.0
     else:
         base = 0.75
-    for domain, markers in QUALIFICATION_DOMAINS.items():
+    for _domain, markers in QUALIFICATION_DOMAINS.items():
         relevant_line = next((line for line in mandatory if any(marker in line.lower() for marker in markers)), None)
         if relevant_line and not any(marker in education for marker in markers):
             missing.append(relevant_line)
@@ -248,8 +243,6 @@ def score_job(job: dict, profile: dict, preferences: dict, cv_text: str = "", fi
     token_ratio = min(1.0, token_overlap / 18.0)
     skills_ratio = min(1.0, skill_phrase_ratio * 0.75 + token_ratio * 0.25)
 
-    # Responsibility fit is deliberately tied to proven CV phrases and role
-    # family rather than generic words such as communication or teamwork.
     cv_terms = _terms(cv_text)
     high_signal_overlap = len((cv_terms & job_terms) - {"marketing", "customer", "communication", "management"})
     responsibility_ratio = min(1.0, (role_ratio * 0.65) + min(1.0, high_signal_overlap / 24.0) * 0.35)
@@ -322,9 +315,6 @@ def score_job(job: dict, profile: dict, preferences: dict, cv_text: str = "", fi
     elif seniority == "manager" and role_ratio < 0.75:
         total = min(total, 58.0)
 
-    # Catch explicit essential niche-industry requirements. This avoids cases
-    # such as Project Estimator/Receptionist being promoted on the receptionist
-    # keyword while the vacancy says tiling-industry experience is essential.
     candidate_evidence = _plain(cv_text + " " + " ".join(candidate_phrases) + " " + " ".join(fit.get("education", [])))
     for line in mandatory:
         lower = line.lower()
@@ -346,14 +336,9 @@ def score_job(job: dict, profile: dict, preferences: dict, cv_text: str = "", fi
         f"verified family strength {round(family_strength * 100)}%; "
         f"matched evidence: {', '.join(matched_skills[:6]) if matched_skills else 'limited direct skill evidence'}."
     )
-    if rejection_reasons:
-        reasoning = " ".join(rejection_reasons) + " " + fit_reason
-    else:
-        reasoning = fit_reason
-
+    reasoning = (" ".join(rejection_reasons) + " " + fit_reason).strip() if rejection_reasons else fit_reason
     missing = list(dict.fromkeys(mandatory_missing))[:12]
-    breakdown = dict(numeric_breakdown)
-    breakdown["evidence"] = {
+    evidence = {
         "job_family": family,
         "family_strength": round(family_strength, 3),
         "required_years": required_years,
@@ -366,7 +351,8 @@ def score_job(job: dict, profile: dict, preferences: dict, cv_text: str = "", fi
     return {
         "score": total,
         "classification": classification,
-        "breakdown": breakdown,
+        "breakdown": numeric_breakdown,
+        "evidence": evidence,
         "matched_skills": matched_skills[:12],
         "mandatory_missing_requirements": missing,
         "missing_requirements": missing,
