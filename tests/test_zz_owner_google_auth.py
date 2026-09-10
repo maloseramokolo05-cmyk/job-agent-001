@@ -1,7 +1,5 @@
 from fastapi.testclient import TestClient
 
-import api.index as entry
-
 
 class GoogleProfileResponse:
     def __init__(self, email):
@@ -14,7 +12,17 @@ class GoogleProfileResponse:
         return {"emailAddress": self.email}
 
 
+def _entry():
+    # Import the production entrypoint only when these final tests execute.
+    # Importing it during pytest collection mutates backend.main.app globally
+    # and breaks the backend-unit tests that intentionally exercise that app.
+    import api.index as entry
+
+    return entry
+
+
 def test_private_api_requires_owner_session_without_password_config(monkeypatch):
+    entry = _entry()
     monkeypatch.delenv("ADMIN_PASSWORD_HASH", raising=False)
     paths = {getattr(route, "path", None) for route in entry.app.router.routes}
     assert "/api/auth/login" not in paths
@@ -25,6 +33,7 @@ def test_private_api_requires_owner_session_without_password_config(monkeypatch)
 
 
 def test_google_callback_without_params_starts_owner_sign_in(monkeypatch):
+    entry = _entry()
     monkeypatch.setattr(
         entry,
         "start_authorization",
@@ -37,6 +46,7 @@ def test_google_callback_without_params_starts_owner_sign_in(monkeypatch):
 
 
 def test_wrong_google_account_is_rejected(monkeypatch):
+    entry = _entry()
     disconnected = []
     monkeypatch.setattr(entry, "load_profile", lambda: {"email": "maloseramokolo05@gmail.com"})
     monkeypatch.setattr(entry, "complete_authorization", lambda code, state: {"connected": True})
@@ -54,6 +64,7 @@ def test_wrong_google_account_is_rejected(monkeypatch):
 
 
 def test_matching_google_account_creates_owner_session(monkeypatch):
+    entry = _entry()
     monkeypatch.setattr(entry, "load_profile", lambda: {"email": "maloseramokolo05@gmail.com"})
     monkeypatch.setattr(entry, "complete_authorization", lambda code, state: {"connected": True})
     monkeypatch.setattr(entry, "access_token", lambda: "access-token")
