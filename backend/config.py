@@ -70,8 +70,19 @@ def save_json(name, value):
 
 
 def database_path():
-    path = Path(os.getenv("DATABASE_PATH", "data/job_agent.db"))
-    return path if path.is_absolute() else ROOT / path
+    explicit = os.getenv("DATABASE_PATH", "").strip()
+    if explicit:
+        path = Path(explicit)
+        return path if path.is_absolute() else ROOT / path
+
+    # Vercel preview deployments may intentionally omit the production Neon
+    # DATABASE_URL. The deployed source tree is read-only at runtime, so use
+    # Vercel's writable /tmp area for the disposable preview SQLite database.
+    # Production still uses DATABASE_URL and is guarded separately at startup.
+    if os.getenv("VERCEL") and os.getenv("VERCEL_ENV") == "preview" and not os.getenv("DATABASE_URL"):
+        return Path("/tmp/tumelo-job-agent-preview.db")
+
+    return ROOT / "data/job_agent.db"
 
 
 def app_base_url():
