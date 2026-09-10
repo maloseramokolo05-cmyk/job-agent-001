@@ -39,7 +39,7 @@ app.router.routes = [
 ]
 app.middleware_stack = None
 
-_GMAIL_PROFILE_URL = "https://gmail.googleapis.com/gmail/v1/users/me/profile"
+_GOOGLE_USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
 _PUBLIC_PATHS = {
     "/",
     "/api/health",
@@ -148,12 +148,11 @@ async def google_owner_guard(request: Request, call_next):
 
 @app.get("/api/google/callback")
 def owner_google_auth(request: Request, code: str | None = None, state: str | None = None):
-    # This callback is the only sign-in entry point. Opening it directly starts
-    # Google OAuth; Google's redirect back here completes both owner sign-in and
-    # the Gmail/Drive/Calendar connection.
+    # Opening this callback directly starts Google OAuth. Google's redirect back
+    # completes both owner sign-in and the Gmail/Drive/Calendar connection.
     if not code and not state:
         try:
-            started = start_authorization(["gmail", "drive", "calendar"])
+            started = start_authorization(["identity", "gmail", "drive", "calendar"])
         except ValueError as exc:
             raise HTTPException(503, "Google OAuth is not configured. Upload the OAuth JSON on the sign-in screen.") from exc
         return RedirectResponse(started["authorization_url"])
@@ -167,23 +166,36 @@ def owner_google_auth(request: Request, code: str | None = None, state: str | No
 
     try:
         complete_authorization(code, state)
+    except Exception as exc:
+        disconnect()
+        raise HTTPException(
+            400,
+            "Google token exchange failed. Reconnect using the current OAuth client and try again.",
+        ) from exc
+
+    try:
         token = access_token()
         google_response = requests.get(
-            _GMAIL_PROFILE_URL,
+            _GOOGLE_USERINFO_URL,
             headers={"Authorization": f"Bearer {token}"},
             timeout=20,
         )
         google_response.raise_for_status()
-        connected_email = str(google_response.json().get("emailAddress", "")).strip().lower()
+        connected_email = str(google_response.json().get("email", "")).strip().lower()
+        email_verified = google_response.json().get("email_verified", True)
+        if not connected_email or not email_verified:
+            raise PermissionError("Google did not return a verified account email")
         if connected_email != expected_email:
-            disconnect()
             raise PermissionError("This Google account is not authorized for the Job Agent")
     except PermissionError as exc:
         disconnect()
         raise HTTPException(403, str(exc)) from exc
     except Exception as exc:
         disconnect()
-        raise HTTPException(400, "Google authorization failed. Reconnect and try again.") from exc
+        raise HTTPException(
+            400,
+            "Google sign-in succeeded, but owner identity verification failed. Reconnect and try again.",
+        ) from exc
 
     session = new_session(expected_email)
     csrf = csrf_token()
