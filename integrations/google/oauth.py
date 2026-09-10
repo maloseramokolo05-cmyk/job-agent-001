@@ -14,6 +14,7 @@ import requests
 
 from backend.config import ROOT, app_base_url
 from backend.database import connect
+from .credentials import CredentialStore
 from .models import FEATURE_SCOPES
 from .token_store import TokenStore
 
@@ -22,10 +23,14 @@ TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 
 def client_config():
-    client_id = os.getenv("GOOGLE_CLIENT_ID", "")
-    secret = os.getenv("GOOGLE_CLIENT_SECRET", "")
+    # Credentials uploaded inside the app take precedence over Vercel env vars.
+    # This lets the owner replace a deleted Google OAuth client without touching
+    # deployment configuration or redeploying the app.
+    stored = CredentialStore().load() or {}
+    client_id = stored.get("client_id", "") or os.getenv("GOOGLE_CLIENT_ID", "")
+    secret = stored.get("client_secret", "") or os.getenv("GOOGLE_CLIENT_SECRET", "")
     path = Path(os.getenv("GOOGLE_CREDENTIALS_FILE", ROOT / "data/secrets/credentials.json"))
-    if path.exists():
+    if path.exists() and not (client_id and secret):
         raw = json.loads(path.read_text(encoding="utf-8"))
         item = raw.get("web") or raw.get("installed") or {}
         client_id = client_id or item.get("client_id", "")
