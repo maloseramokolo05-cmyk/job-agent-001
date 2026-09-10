@@ -1,5 +1,14 @@
+from pathlib import Path
+import shutil
+import subprocess
+
+import pytest
+
 from applications.thresholds import effective_auto_prepare_threshold, effective_email_threshold
 from job_sources.careers24 import _section
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_email_threshold_has_safe_floor():
@@ -41,3 +50,16 @@ def test_careers24_section_starts_at_vacancy_details():
     assert cleaned.startswith("Vacancy Details")
     assert "Navigation noise" not in cleaned
     assert "Footer" not in cleaned
+
+
+def test_frontend_javascript_parses():
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("Node is not available on this runner")
+    result = subprocess.run(
+        [node, "--check", str(ROOT / "frontend/app-v2.js")],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
