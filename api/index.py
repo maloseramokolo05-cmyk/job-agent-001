@@ -3,6 +3,13 @@ from __future__ import annotations
 import os
 import secrets
 
+# Production uses Google-owner authentication instead of a password. The
+# backend's existing production guard and security middleware use the presence
+# of ADMIN_PASSWORD_HASH as an "authentication enabled" marker, so provide a
+# non-secret sentinel before importing the backend. The password-login route is
+# removed below, therefore this value is never accepted as a user password.
+os.environ.setdefault("ADMIN_PASSWORD_HASH", "google-owner-auth-enabled")
+
 import requests
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
