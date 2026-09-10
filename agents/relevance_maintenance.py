@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
 from agents.repository import update_analysis
 from agents.scoring import score_job
-from backend.database import rows
+from backend.database import connect, row, rows
 
 
 PROTECTED_HISTORY = {
@@ -16,14 +19,54 @@ PROTECTED_HISTORY = {
     "EXPIRED",
 }
 
+RELEVANCE_ALGORITHM_VERSION = "2026-09-product-audit-1"
+STATE_KEY = "relevance_rescore_state"
+
+
+def _fingerprint(fit: dict, preferences: dict) -> str:
+    relevant_preferences = {
+        "job_categories": preferences.get("job_categories", []),
+        "priority_locations": preferences.get("priority_locations", []),
+        "minimum_score": preferences.get("minimum_score"),
+        "email_minimum_score": preferences.get("email_minimum_score"),
+        "allow_other_sa_locations": preferences.get("allow_other_sa_locations"),
+    }
+    payload = json.dumps(
+        {
+            "algorithm": RELEVANCE_ALGORITHM_VERSION,
+            "candidate": fit.get("fingerprint"),
+            "preferences": relevant_preferences,
+        },
+        sort_keys=True,
+        ensure_ascii=False,
+    )
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
 
 def rescore_existing(profile: dict, preferences: dict, master: str, fit: dict) -> dict:
-    """Re-score existing jobs without rewriting application history.
+    """Re-score existing jobs only when candidate/relevance inputs changed.
 
-    Applied/historical outcomes are left untouched. For workflow states such as
-    PREPARED/NEEDS_USER_ACTION we update fit metadata but preserve the status.
-    Only DISCOVERED/SHORTLISTED are reclassified based on the new fit score.
+    Applied/historical outcomes are never rewritten. This avoids spending most
+    of every search run re-scoring an unchanged database.
     """
+    fingerprint = _fingerprint(fit, preferences)
+    cached = row("SELECT value FROM settings WHERE key=?", (STATE_KEY,))
+    if cached:
+        try:
+            value = json.loads(cached["value"])
+            if value.get("fingerprint") == fingerprint:
+                return {
+                    "evaluated": 0,
+                    "changed": 0,
+                    "downgraded": 0,
+                    "upgraded": 0,
+                    "samples": [],
+                    "skipped": True,
+                    "reason": "candidate profile and scoring algorithm unchanged",
+                }
+        except (TypeError, json.JSONDecodeError):
+            pass
+
     jobs = rows(
         "SELECT j.* FROM jobs j "
         "WHERE j.status NOT IN ('APPLIED','APPLIED_CONFIRMED','INTERVIEW','ASSESSMENT','OFFER','REJECTED','WITHDRAWN','EXPIRED') "
@@ -57,10 +100,19 @@ def rescore_existing(profile: dict, preferences: dict, master: str, fit: dict) -
                     "classification": result["classification"],
                     "reason": result.get("rejection_reason") or result.get("fit_reason"),
                 })
+
+    with connect() as db:
+        payload = json.dumps({"fingerprint": fingerprint, "algorithm": RELEVANCE_ALGORITHM_VERSION})
+        db.execute(
+            "INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value",
+            (STATE_KEY, payload),
+        )
+
     return {
         "evaluated": len(jobs),
         "changed": changed,
         "downgraded": downgraded,
         "upgraded": upgraded,
         "samples": samples,
+        "skipped": False,
     }
