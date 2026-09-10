@@ -1,29 +1,17 @@
 from __future__ import annotations
 
-import json
 import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
 from agents.pipeline import cv_text
-from backend.config import load_preferences
+from applications.thresholds import effective_email_threshold
 from backend.database import LATEST_SCHEMA_VERSION, row, rows, schema_version
 from backend.storage import ObjectStorage
 from integrations.google.token_store import TokenStore
 
 router = APIRouter()
-
-
-def _json(value, default):
-    if value in (None, ""):
-        return default
-    if isinstance(value, (dict, list)):
-        return value
-    try:
-        return json.loads(value)
-    except (TypeError, json.JSONDecodeError):
-        return default
 
 
 def _human_status(value: str | None) -> str:
@@ -48,7 +36,7 @@ def _human_status(value: str | None) -> str:
 
 def _job_action(job: dict) -> dict:
     status = str(job.get("status") or "")
-    if status in {"READY_TO_APPLY"} and job.get("email_verified"):
+    if status == "READY_TO_APPLY" and job.get("email_verified"):
         action = "Review email application"
         action_type = "email_review"
     elif status in {"NEEDS_USER_ACTION", "NEEDS_USER_INPUT", "MANUAL_APPLICATION"}:
@@ -74,11 +62,6 @@ def _job_action(job: dict) -> dict:
         "application_url": job.get("application_url") or job.get("vacancy_url"),
         "email_verified": bool(job.get("email_verified")),
     }
-
-
-def effective_email_threshold() -> float:
-    preferences = load_preferences()
-    return max(80.0, float(preferences.get("email_minimum_score", 80) or 80))
 
 
 @router.get("/api/dashboard")
