@@ -74,8 +74,8 @@ function workMode(job) {
 function matchLabel(score) {
   const n = Number(score || 0);
   if (n >= 80) return ['High Match', 'success'];
-  if (n >= 68) return ['Good Match', ''];
-  return ['Review', 'warning'];
+  if (n >= 70) return ['Good Match', ''];
+  return ['Possible Match', 'warning'];
 }
 
 function statusClass(status = '') {
@@ -159,8 +159,8 @@ function renderPipeline(m) {
 }
 
 function renderCompactJobs(jobs) {
-  const top = [...jobs].sort((a,b) => Number(b.score || 0) - Number(a.score || 0)).slice(0,4);
-  $('#topMatches').innerHTML = top.length ? top.map(j => `<div class="compact-job"><div class="company-badge">${esc(initials(j.company))}</div><div class="compact-job-copy"><b>${esc(j.title)}</b><small>${esc(j.company)} · ${esc(j.location || 'Location unstated')}${workMode(j) ? ' · ' + esc(workMode(j)) : ''}</small></div><span class="match">${Math.round(Number(j.score || 0))}%</span><button class="row-action" onclick="detail(${Number(j.id)})" aria-label="Review ${esc(j.title)}">›</button></div>`).join('') : `<div class="empty-state"><p>No matches yet. Run your first RSA job search to fill this list.</p></div>`;
+  const top = [...jobs].filter(j => Number(j.score || 0) >= 75).sort((a,b) => Number(b.score || 0) - Number(a.score || 0)).slice(0,4);
+  $('#topMatches').innerHTML = top.length ? top.map(j => `<div class="compact-job"><div class="company-badge">${esc(initials(j.company))}</div><div class="compact-job-copy"><b>${esc(j.title)}</b><small>${esc(j.company)} · ${esc(j.location || 'Location unstated')}${workMode(j) ? ' · ' + esc(workMode(j)) : ''}</small></div><span class="match">${Math.round(Number(j.score || 0))}%</span><button class="row-action" onclick="detail(${Number(j.id)})" aria-label="Review ${esc(j.title)}">›</button></div>`).join('') : `<div class="empty-state"><p>No strong matches yet. Run an RSA job search and the agent will only surface roles that fit your verified CV.</p></div>`;
 }
 
 function visibleJobs() {
@@ -235,7 +235,7 @@ function renderActivity(jobs, apps, docs) {
 async function loadJobs() {
   const q = $('#search')?.value || '';
   const status = $('#status')?.value || '';
-  jobsCache = await api(`/api/jobs?q=${encodeURIComponent(q)}&status=${encodeURIComponent(status)}`);
+  jobsCache = await api(`/api/jobs?min_score=65&q=${encodeURIComponent(q)}&status=${encodeURIComponent(status)}`);
   renderJobs();
   renderCompactJobs(jobsCache);
 }
@@ -243,7 +243,7 @@ async function loadJobs() {
 async function load() {
   try {
     const [m, jobs, apps, docs, cv, g, sources, c, logs] = await Promise.all([
-      api('/api/overview'), api(`/api/jobs?q=${encodeURIComponent($('#search')?.value || '')}&status=${encodeURIComponent($('#status')?.value || '')}`),
+      api('/api/overview'), api(`/api/jobs?min_score=65&q=${encodeURIComponent($('#search')?.value || '')}&status=${encodeURIComponent($('#status')?.value || '')}`),
       api('/api/applications'), api('/api/documents'), api('/api/cv'), api('/api/google/status'), api('/api/sources'), api('/api/config'), api('/api/logs')
     ]);
     overviewCache = m; jobsCache = jobs;
