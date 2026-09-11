@@ -1,26 +1,32 @@
 {
-  "priority_locations": ["Pretoria", "Centurion", "Akasia", "Midrand", "Johannesburg", "Gauteng"],
-  "job_categories": [
-    "marketing",
-    "digital marketing",
-    "social media",
-    "content",
-    "communications",
-    "customer service",
-    "sales support",
-    "administration",
-    "operations",
-    "project support",
-    "e-commerce",
-    "web content",
-    "graduate"
+  "priority_locations": [
+    "Pretoria", "Centurion", "Akasia", "Rosslyn", "Montana", "Menlyn", "Hatfield",
+    "Midrand", "Johannesburg", "Sandton", "Randburg", "Roodepoort", "Ekurhuleni", "Gauteng",
+    "Bloemfontein", "Durban", "Cape Town", "Gqeberha", "Polokwane", "Mbombela", "Rustenburg",
+    "South Africa", "Remote"
   ],
-  "minimum_score": 68,
+  "job_categories": [
+    "marketing assistant", "marketing administrator", "marketing coordinator", "junior marketing coordinator",
+    "digital marketing assistant", "digital marketing coordinator", "social media assistant", "social media coordinator",
+    "content assistant", "content coordinator", "content creator", "communications assistant", "communications coordinator",
+    "brand assistant", "campaign assistant", "campaign coordinator", "ecommerce assistant", "website content assistant",
+    "crm assistant", "crm coordinator", "customer engagement", "customer support", "customer service", "client services",
+    "client support", "sales support", "sales administrator", "sales coordinator", "business development assistant",
+    "lead generation", "account coordinator", "account support", "junior account executive", "administrative assistant",
+    "administrator", "office administrator", "operations administrator", "operations support", "project administrator",
+    "project support", "project coordinator", "receptionist", "front desk", "call centre agent", "customer care administrator",
+    "graduate programme", "graduate intern", "marketing graduate", "business graduate", "junior web developer",
+    "junior frontend developer", "website administrator", "web content coordinator", "digital assistant"
+  ],
+  "minimum_score": 62,
   "application_mode": "AUTO_EMAIL",
-  "schedule_times": ["07:00"],
+  "schedule_times": [
+    "00:00", "02:00", "04:00", "06:00", "08:00", "10:00",
+    "12:00", "14:00", "16:00", "18:00", "20:00", "22:00"
+  ],
   "allow_other_sa_locations": true,
-  "email_auto_send": false,
-  "email_minimum_score": 72,
+  "email_auto_send": true,
+  "email_minimum_score": 68,
   "search_feeds": [
     "https://iyouth.co.za/rss/category/private-jobs",
     "https://iyouth.co.za/rss/category/internships",
@@ -30,14 +36,19 @@
   "lever_sites": ["mamamoney", "assist-world", "brafton", "weloglobal", "binance"],
   "careers24_enabled": true,
   "careers24_queries": [
-    "marketing",
-    "digital-marketing",
-    "social-media",
-    "administrator",
-    "customer-service",
-    "operations",
-    "graduate"
+    "marketing", "digital-marketing", "social-media", "administrator", "customer-service", "operations", "graduate",
+    "sales", "receptionist", "project-coordinator", "content", "communications"
   ],
-  "max_jobs_per_source": 60,
-  "email_duplicate_window_days": 365
+  "max_jobs_per_source": 150,
+  "email_duplicate_window_days": 365,
+  "hyperdrive_mode": true,
+  "minimum_new_applications_per_productive_run": 10,
+  "preferred_new_applications_per_run": 20,
+  "expected_salary_monthly_zar": 12000,
+  "transport_answer": "Public transportation",
+  "has_drivers_licence": false,
+  "owns_vehicle": false,
+  "continue_search_after_target": true,
+  "replace_duplicates_and_blocked_jobs": true,
+  "truthful_master_cv": "Tumelo_Ramokolo_CV_ATS_2026_Final.docx"
 }
